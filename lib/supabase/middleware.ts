@@ -5,7 +5,7 @@ import { getSupabaseConfig } from "@/lib/supabase/env";
 import type { Database } from "@/lib/supabase/types";
 
 const ADMIN_PREFIX = "/admin";
-const AUTH_PREFIXES = ["/login", "/logout"];
+const AUTH_PREFIXES = ["/login", "/register", "/logout"];
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });

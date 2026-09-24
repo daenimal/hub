@@ -5,7 +5,7 @@ import { getSupabaseConfig } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
-  title: "Admin Dashboard | MicroHub",
+  title: "Admin Dashboard",
   robots: { index: false },
 };
 

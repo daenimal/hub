@@ -21,3 +21,12 @@ test("unauthenticated users cannot reach the admin dashboard", async ({
   await expect(page.getByText("Dashboard Admin")).toHaveCount(0);
   await expect(page).not.toHaveURL(/\/admin\//);
 });
+
+test("register page renders and links to login", async ({ page }) => {
+  await page.goto("/register");
+  await expect(
+    page.getByRole("heading", { name: "Create your account" }),
+  ).toBeVisible();
+  await page.getByRole("main").getByRole("link", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/\/login/);
+});

@@ -3,6 +3,9 @@ import { Geist, Geist_Mono } from "next/font/google";
 
 import { Navbar } from "@/components/navbar";
 import { ClientErrorMonitor } from "@/components/client-error-monitor";
+import { ThemeProvider } from "@/components/theme-provider";
+
+import { THEME_STORAGE_KEY } from "@/lib/themes";
 
 import "./globals.css";
 
@@ -16,11 +19,18 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const themeInitScript = `(function(){try{var t=localStorage.getItem(${JSON.stringify(
+  THEME_STORAGE_KEY,
+)});if(t){document.documentElement.dataset.theme=t;}}catch(e){}}());`;
+
 export const metadata: Metadata = {
   metadataBase: new URL(
     process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
   ),
-  title: "MicroHub - Micro Utility Hub",
+  title: {
+    default: "MicroHub — Micro Utility Hub",
+    template: "%s | MicroHub",
+  },
   description:
     "Personal hub of in-browser micro-utilities for developers, 3D artists, and creators.",
 };
@@ -29,12 +39,17 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
       <body className="flex min-h-full flex-col">
-        <Navbar />
-        <ClientErrorMonitor />
-        <main className="flex flex-1 flex-col">{children}</main>
+        <ThemeProvider>
+          <Navbar />
+          <ClientErrorMonitor />
+          <main className="flex flex-1 flex-col">{children}</main>
+        </ThemeProvider>
       </body>
     </html>
   );
