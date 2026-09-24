@@ -61,9 +61,11 @@ export async function Navbar() {
         <div className="flex min-w-0 items-center gap-2">
           {user ? (
             <>
+              {user?.email ? (
               <span className="hidden min-w-0 truncate text-sm text-zinc-600 dark:text-zinc-400 sm:inline">
                 {user.email}
               </span>
+            ) : null}
               <SignOutButton />
             </>
           ) : (

@@ -15,6 +15,17 @@ export async function updateSession(request: NextRequest) {
     return supabaseResponse;
   }
 
+  const { pathname } = request.nextUrl;
+  const isAuthRoute = AUTH_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+
+  // Skip the auth round-trip on public pages: only protected paths need the
+  // session resolved. The Navbar Server Component handles UI auth state.
+  if (!isAdminRoute(pathname) && !isAuthRoute) {
+    return supabaseResponse;
+  }
+
   const supabase = createServerClient<Database>(config.url, config.anonKey, {
       cookies: {
         getAll() {
@@ -36,11 +47,6 @@ export async function updateSession(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  const { pathname } = request.nextUrl;
-  const isAuthRoute = AUTH_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-  );
 
   if (!user) {
     if (isAdminRoute(pathname)) {

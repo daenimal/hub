@@ -5,11 +5,23 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
 import { createClient } from "@/lib/supabase/client";
+import { getSupabaseConfig } from "@/lib/supabase/env";
+
+function isInternalUrl(url: string | null): url is string {
+  if (!url || !url.startsWith("/")) {
+    return false;
+  }
+  if (url.startsWith("//") || url.startsWith("/\\")) {
+    return false;
+  }
+  return true;
+}
 
 function LoginFormInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") ?? "/";
+  const rawNext = searchParams.get("next");
+  const next = isInternalUrl(rawNext) ? rawNext : "/";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -20,6 +32,14 @@ function LoginFormInner() {
     event.preventDefault();
     setIsSubmitting(true);
     setError(null);
+
+    if (!getSupabaseConfig()) {
+      setError(
+        "Autenticazione non configurata: imposta le variabili d'ambiente Supabase.",
+      );
+      setIsSubmitting(false);
+      return;
+    }
 
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithPassword({
