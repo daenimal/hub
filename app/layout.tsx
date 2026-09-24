@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 
 import { Navbar } from "@/components/navbar";
 import { ClientErrorMonitor } from "@/components/client-error-monitor";
@@ -50,6 +51,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <ClientErrorMonitor />
           <main className="flex flex-1 flex-col">{children}</main>
         </ThemeProvider>
+        <Analytics />
       </body>
     </html>
   );
