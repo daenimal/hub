@@ -41,13 +41,15 @@ The migrations are:
 
 - `001_initial_schema.sql` - `profiles` linked to `auth.users` with a `role` column (`CHECK (role IN ('user','admin'))`); `is_admin()` security-definer function used by RLS policies and admin guards; RLS (users read/update their own profile, admins all profiles, no client-side role escalation); auto-creation of profiles on signup
 - `002_app_errors.sql` - `app_errors` table with RLS (anyone inserts through the validated endpoints, only admins read/delete), used by the error capture and the weekly monitoring report
+- `003_hardening.sql` - `tool_presets` table (per-user/private or shared presets, RLS keyed on `auth.uid()`); a trigger syncing `profiles.email` on `auth.users` email changes; a DB-level sanitizer trigger on `app_errors` that mirrors the server-side length caps so arbitrary REST inserts cannot inject oversized/garbage payloads
 
 ## Observability & monitoring
 
 - Server/proxy errors are captured by `instrumentation.ts` (Next.js `onRequestError`).
 - Client errors are captured by `components/client-error-monitor.tsx` (window `error`/`unhandledrejection`, throttled) and by the `app/error.tsx` / `app/global-error.tsx` boundaries; validated payloads are posted to `/api/log`.
-- Everything lands in the `app_errors` table (`lib/observability/report.ts` handles sanitize + throttle).
+- Everything lands in the `app_errors` table (`lib/observability/report.ts` handles sanitize + throttle, and `003_hardening.sql` enforces the same caps at the DB level).
 - `.github/workflows/weekly-monitoring.yml` runs `scripts/weekly-report.mjs` every Monday at 08:00 (and on `workflow_dispatch`): it summarizes the last 7 days of errors (grouped by message/source), flags failed deployments, and opens a GitHub issue with diagnostics.
+- `.github/workflows/cleanup-app-errors.yml` runs `scripts/cleanup-app-errors.mjs` weekly to delete `app_errors` rows older than 30 days (retention).
 
 ## Testing
 
@@ -68,6 +70,6 @@ Admin routes are protected on three tiers:
 
 ## Tool 1: Texture / Retro-Style Optimizer
 
-Route: `/tools/texture-optimizer`. Pixel manipulation (quantization, dithering, resizing) runs off the main thread in `workers/optimizer.worker.ts` (OffscreenCanvas), instantiated via `lib/texture-optimizer/worker.ts`.
+Route: `/tools/texture-optimizer`. Pixel manipulation (downscale, color quantization via median-cut, Floyd-Steinberg/Bayer/ordered dithering) runs off the main thread in `workers/optimizer.worker.ts` (OffscreenCanvas), instantiated via `lib/texture-optimizer/worker.ts`. The UI (`components/tools/texture-optimizer/optimizer-ui.tsx`) is a small state machine (`idle → processing → done/error/canceled`) with live progress, cancel, PNG preview + download, and reusable settings presets via `lib/texture-optimizer/presets.ts` (DB-backed for signed-in users, `localStorage` fallback).
 
 See `AGENTS.md` for the binding architecture guidelines for all future work.

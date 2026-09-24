@@ -38,7 +38,7 @@ export function ClientErrorMonitor() {
 
     function onError(event: ErrorEvent) {
       sendError({
-        message: event.message || "Errore sconosciuto",
+        message: event.message || "Unknown error",
         stack: event.error instanceof Error ? event.error.stack : undefined,
         path: window.location.pathname,
       });

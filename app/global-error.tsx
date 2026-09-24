@@ -17,7 +17,7 @@ export default function GlobalError({
       body: JSON.stringify({
         source: "client",
         severity: "fatal",
-        message: (error.message || "Errore globale").slice(0, 2000),
+        message: (error.message || "Global error").slice(0, 2000),
         digest: error.digest,
         stack: error.stack?.slice(0, 8000),
         path: window.location.pathname,
@@ -28,7 +28,7 @@ export default function GlobalError({
   }, [error]);
 
   return (
-    <html lang="it">
+    <html lang="en">
       <body>
         <div className="flex min-h-screen items-center justify-center bg-white px-4">
           <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-8 text-center shadow-sm">

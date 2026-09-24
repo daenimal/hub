@@ -18,21 +18,24 @@ Personal micro-utility hub: in-browser tools for developers/3D artists/creators.
 - Supabase: project ref `suathhkztrlgsqnwdspj`, region `eu-central-1`. Schema in `/supabase/migrations/`:
   - `001_initial_schema.sql` — `profiles` linked to `auth.users`, `is_admin()` (SECURITY DEFINER), RLS, profile auto-create on signup.
   - `002_app_errors.sql` — `app_errors` error table (RLS: anyone inserts via validated endpoints, only admins read/delete).
-  - Local link intact (`supabase/.temp`, PAT persisted). Migrations 001/002 in sync local↔remote.
+  - `003_hardening.sql` — `tool_presets` (per-user/shared presets, RLS on `auth.uid()`), `profiles.email` sync trigger on `auth.users.email` change, DB-level `app_errors` sanitizer trigger (mirrors server-side length caps).
+  - Local link intact (`supabase/.temp`, PAT persisted). Migrations 001/002/003 in sync local↔remote.
 - Vercel: production deploy current; `/` → 200, `/admin/dashboard` → 307 (proxy guard working).
-- Quality gates: `npm run lint`, `npm run typecheck`, `npm run build` green; Playwright e2e 5/5 green (specs are env-agnostic on purpose).
+- Quality gates: `npm run lint`, `npm run typecheck`, `npm run build` green; Playwright e2e 7/7 green (specs are env-agnostic on purpose).
 
 ## 4. Architecture map
 
 - `proxy.ts` → `lib/supabase/middleware.ts` — session refresh + admin guard. **Early-exits (no `getUser()`) on public paths** to save serverless time; consequence: on `public` pages near token expiry the Navbar may briefly show logged-out (acceptable trade-off, protected routes unaffected).
 - `lib/supabase/` — `client.ts` (browser), `server.ts` (RSC), `middleware.ts`, `env.ts` (returns null when env missing → callers must guard), `types.ts`.
-- `components/tools/texture-optimizer/` — Tool 1 UI; `workers/optimizer.worker.ts` (OffscreenCanvas) wired via `lib/texture-optimizer/worker.ts`. Worker must use `new Worker(new URL('@/workers/optimizer.worker.ts', import.meta.url))`.
+- `components/tools/texture-optimizer/optimizer-ui.tsx` — Tool 1 UI: **state machine** (`idle → processing → done/error/canceled`), live progress, cancel, PNG preview + download, presets (save/load/delete via `lib/texture-optimizer/presets.ts`: Supabase `tool_presets` when signed in, `localStorage` fallback). `workers/optimizer.worker.ts` — **complete pipeline** (decode → downscale to maxWidth/maxHeight with `imageSmoothingEnabled=false` → median-cut quantization → Floyd-Steinberg/Bayer/ordered dithering → progress bands → `transferToImageBitmap`), with guardrails (≤64 MB file, ≤8k×8k decode cap, ≤2048×2048 process cap) and per-job cancel. Wired via `lib/texture-optimizer/worker.ts`. Worker must use `new Worker(new URL('@/workers/optimizer.worker.ts', import.meta.url))`.
+- `lib/tools/registry.tsx` — D1: single source of truth for the tool list (homepage renders from it); `getTool(slug)`, `toolBadge(status)`.
 - `lib/observability/report.ts` — `sanitizeEntry()` (field/len limits, whitelisted source/severity/method) + `reportError()` (sends via Supabase REST with anon key, 15s in-memory throttle). Errors are reported directly to Supabase REST (never via `/api/log` from the server — avoids recursion).
 - `instrumentation.ts` — `onRequestError` → server/proxy errors into `app_errors`.
 - `app/api/log/route.ts` — POST intake for client errors; validates/sanitizes then forwards.
 - `app/error.tsx` + `app/global-error.tsx` — boundary UI with `retry`, auto-report errors; `components/client-error-monitor.tsx` listens to window `error` + `unhandledrejection` (throttled ~1 per 2s, `keepalive`).
 - `scripts/weekly-report.mjs` + `.github/workflows/weekly-monitoring.yml` — every Monday 08:00 (+`workflow_dispatch`): queries last 7 days of `app_errors`, flags failed deployments via `gh api`, opens a GitHub issue with grouped diagnostics. Works locally in dry-run (no `--create-issue`).
-- `e2e/` — `home.spec.ts` (3 smoke tests) + `auth.spec.ts` (2 guard tests). `playwright.config.ts` webServer = `npm run build && npm run start`.
+- `scripts/cleanup-app-errors.mjs` + `.github/workflows/cleanup-app-errors.yml` — weekly retention: deletes `app_errors` older than 30 days via service role.
+- `e2e/` — `home.spec.ts` (3 smoke), `auth.spec.ts` (2 guards), `optimizer.spec.ts` (2: full pipeline + cancel; generates a real PNG in-test). `playwright.config.ts` webServer = `npm run build && npm run start`.
 
 ## 5. Environment variables & secrets (critical)
 
@@ -50,9 +53,10 @@ Personal micro-utility hub: in-browser tools for developers/3D artists/creators.
 
 ## 7. Known gaps / intended follow-ups
 
-- `profiles.email` is not synced when the user changes email in `auth.users` (would need a trigger/update hook) — cosmetic for now.
 - Weekly GitHub issue only *reports* bugs; fixing them requires a manual/agent session (no autonomous AI in CI, keeps cost 0€).
-- `app_errors` can grow: table has indexes on `created_at` + `source`; no retention/cleanup job yet. Consider a scheduled delete of rows older than N days (admin-only delete) if volume grows.
+- `app_errors` retention is handled (weekly cleanup of rows >30 days); adjust `RETENTION_DAYS` in the workflow if needed.
+- `components/tools/texture-optimizer/optimizer-ui.tsx` uses raw `<img>` for blob previews (rule disabled at file top) because `next/image` cannot optimize `objectURL` previews.
+- The pipeline guardrails cap output at 2048×2048 px and files at 64 MB by design; raise `MAX_PROCESS_PIXELS` if larger textures are ever needed (watch worker memory).
 
 ## 8. Hands-on cheat sheet
 
@@ -64,6 +68,7 @@ npm.cmd run test:e2e     # proxy/auth/route changes or on request
 
 npx.cmd supabase db push --password (Get-Content .env.local... )  # apply migrations
 node scripts/weekly-report.mjs           # dry-run report (uses SUPABASE_URL + SERVICE_KEY env)
+node scripts/cleanup-app-errors.mjs      # retention dry-run (deletes app_errors > 30d)
 ```
 
 Read `AGENTS.md` for full conventions (§0 Commands, §5 Project Map, §7 Security checklist, §8 Testing strategy).

@@ -70,12 +70,14 @@ Keep diffs minimal. Do not run `npm audit`, upgrade deps, or reformat unrelated 
 ## 5. Project Map (read these, don't explore blindly)
 - `proxy.ts` — Next.js Proxy (v16, replaces `middleware.ts`) -> route guard in `lib/supabase/middleware.ts` (redirects, admin check).
 - `lib/supabase/` — `client.ts` (browser), `server.ts` (RSC), `middleware.ts` (proxy session), `env.ts` (config guard, null when env missing), `types.ts` (DB types).
-- `components/` — shared UI; `components/tools/texture-optimizer/` is Tool 1's client UI.
-- `workers/optimizer.worker.ts` — pixel pipeline (OffscreenCanvas + Web Worker), wired via `lib/texture-optimizer/worker.ts`.
+- `components/` — shared UI; `components/tools/texture-optimizer/optimizer-ui.tsx` is Tool 1's client UI (state machine: idle/processing/done/error/canceled; progress, cancel, preview, presets).
+- `lib/tools/registry.tsx` — the tool list used by the homepage (single source of truth: `tools`, `getTool`, `toolBadge`).
+- `workers/optimizer.worker.ts` — complete pixel pipeline (decode, downscale, median-cut quantization, Floyd-Steinberg/Bayer/ordered dithering, progress, per-job cancel, size guardrails), wired via `lib/texture-optimizer/worker.ts`; presets live in `lib/texture-optimizer/presets.ts` (DB if signed in, localStorage fallback).
 - `app/` — routes: `/`, `/login`, `/admin/dashboard`, `/tools/texture-optimizer`, `/api/log` (error intake); `app/robots.ts` disallows `/admin` + `/login`.
 - `instrumentation.ts` — server/proxy error capture via `onRequestError`; `lib/observability/report.ts` sanitizes + writes to `app_errors` table.
 - `scripts/weekly-report.mjs` + `.github/workflows/weekly-monitoring.yml` — weekly error/deploy report posted as a GitHub issue (cron `0 8 * * 1`).
-- `e2e/` — Playwright specs (smoke + auth guards). `playwright.config.ts` uses `npm run build && npm run start` as webServer.
+- `scripts/cleanup-app-errors.mjs` + `.github/workflows/cleanup-app-errors.yml` — weekly `app_errors` retention (deletes rows older than 30 days).
+- `e2e/` — Playwright specs (smoke + auth guards + optimizer pipeline/cancel). `playwright.config.ts` uses `npm run build && npm run start` as webServer.
 - `supabase/migrations/` — DB schema is the source of truth; never hand-edit the remote DB.
 
 ## 6. Windows dev environment

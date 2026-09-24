@@ -27,6 +27,30 @@ export type Database = {
           },
         ];
       };
+      tool_presets: {
+        Row: {
+          id: string;
+          tool_id: string;
+          name: string;
+          settings: Record<string, unknown>;
+          visibility: "private" | "public";
+          user_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Partial<{
+          id: string;
+          tool_id: string;
+          name: string;
+          settings: Record<string, unknown>;
+          visibility: "private" | "public";
+          user_id: string;
+          created_at: string;
+          updated_at: string;
+        }>;
+        Update: Partial<{ name: string; settings: Record<string, unknown>; visibility: "private" | "public" }>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {

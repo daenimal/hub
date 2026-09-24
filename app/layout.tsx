@@ -17,6 +17,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
+  ),
   title: "MicroHub - Micro Utility Hub",
   description:
     "Personal hub of in-browser micro-utilities for developers, 3D artists, and creators.",

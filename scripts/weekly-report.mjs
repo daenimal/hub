@@ -101,7 +101,7 @@ function groupErrors(errors) {
 
 async function main() {
   if (!API_URL || !SERVICE_ROLE) {
-    console.error("Manca SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY");
+    console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
     process.exit(1);
   }
 
@@ -110,24 +110,24 @@ async function main() {
   const failures = fetchDeploymentFailures();
 
   const date = new Date().toISOString().slice(0, 10);
-  const title = `Report settimanale di monitoraggio - ${date}`;
+  const title = `Weekly monitoring report - ${date}`;
 
   const lines = [];
-  lines.push(`## Periodo: ultimi ${DAYS} giorni`);
+  lines.push(`## Period: last ${DAYS} days`);
   lines.push("");
-  lines.push(`- Errori registrati: **${errors.length}**`);
-  lines.push(`- Gruppi distinti (per messaggio): **${groups.length}**`);
-  lines.push(`- Deploy falliti (Vercel/GitHub): **${failures.length}**`);
+  lines.push(`- Errors logged: **${errors.length}**`);
+  lines.push(`- Distinct groups (by message): **${groups.length}**`);
+  lines.push(`- Failed deployments (Vercel/GitHub): **${failures.length}**`);
   lines.push("");
 
   if (errors.length === 0 && failures.length === 0) {
-    lines.push("Nessun errore rilevato nel periodo. :green_circle:");
+    lines.push("No errors detected in the period. :green_circle:");
   } else {
     if (groups.length > 0) {
-      lines.push("### Errori raggruppati");
+      lines.push("### Grouped errors");
       lines.push("");
-      lines.push("| # | Sorgente | Messaggio | Rotte | Primo visto | Ultimo visto |");
-      lines.push("|---|----------|-----------|-------|-------------|--------------|");
+      lines.push("| # | Source | Message | Routes | First seen | Last seen |");
+      lines.push("|---|--------|---------|--------|------------|-----------|");
       for (const g of groups.slice(0, 50)) {
         const routes = [...new Set([g.route, g.path].filter(Boolean))]
           .slice(0, 3)
@@ -142,8 +142,8 @@ async function main() {
 
     if (failures.length > 0) {
       lines.push("");
-      lines.push("### Deploy falliti");
-      lines.push("| Sha | Stato | Data |");
+      lines.push("### Failed deployments");
+      lines.push("| Sha | State | Date |");
       lines.push("|-----|-------|------|");
       for (const f of failures) {
         lines.push(`| ${f.sha} | ${f.state} | ${fmtDate(f.created_at)} |`);
@@ -151,13 +151,13 @@ async function main() {
     }
 
     lines.push("");
-    lines.push("### Diagnostica");
+    lines.push("### Diagnostics");
     lines.push(
-      "- I messaggi ripetuti indicano un bug stabile da fixare; gli errori sporadici vanno correlati con i deploy nel periodo.",
+      "- Repeated messages point to a stable bug to fix; sporadic errors should be correlated with the deployments in the period.",
     );
     lines.push(
-      "- Per risolvere: aprire il log dell'errore (`SELECT * FROM app_errors WHERE " +
-        "message = '...';` in Supabase SQL editor con ruolo admin), identificare la route e applicare il fix su un feature branch.",
+      "- To fix: open the error log (`SELECT * FROM app_errors WHERE " +
+        "message = '...';` in the Supabase SQL editor with an admin role), identify the route and apply the fix on a feature branch.",
     );
   }
 
@@ -168,7 +168,7 @@ async function main() {
     const { writeFileSync } = await import("node:fs");
     writeFileSync(tmp, body);
     gh(`gh issue create --repo ${REPO} --title "${title}" --body-file "${tmp}"`);
-    console.log(`Issue creata: ${title}`);
+    console.log(`Issue created: ${title}`);
   } else {
     console.log(body);
   }
