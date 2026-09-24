@@ -8,6 +8,16 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
+## 0. Commands (cheap validation - run them, do not skip)
+- `npm run lint` — eslint (whole repo) -> every code change
+- `npm run typecheck` — `tsc --noEmit` -> every code change
+- `npm run build` — full production build -> only when `next.config.ts`/`package.json`/config changes, or on request
+- `npm run test:e2e` — Playwright E2E (chromium, `webServer` builds + starts the app) -> when proxy/auth/route/redirect behavior changes, or on request
+
+Keep diffs minimal. Do not run `npm audit`, upgrade deps, or reformat unrelated code unless asked.
+
+---
+
 # AI Agent Instructions & Architecture Guidelines (`agents.md`)
 
 ## 1. Project Overview & Core Philosophy
@@ -53,3 +63,29 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 1. **Branching:** Use feature branches (`feat/texture-optimizer`) and merge into `main` only when stable.
 2. **Incremental Development:** Complete the full vertical slice of the Texture Optimizer before scaffolding additional hub tools.
+
+---
+
+## 5. Project Map (read these, don't explore blindly)
+- `proxy.ts` — Next.js Proxy (v16, replaces `middleware.ts`) -> route guard in `lib/supabase/middleware.ts` (redirects, admin check).
+- `lib/supabase/` — `client.ts` (browser), `server.ts` (RSC), `middleware.ts` (proxy session), `env.ts` (config guard, null when env missing), `types.ts` (DB types).
+- `components/` — shared UI; `components/tools/texture-optimizer/` is Tool 1's client UI.
+- `workers/optimizer.worker.ts` — pixel pipeline (OffscreenCanvas + Web Worker), wired via `lib/texture-optimizer/worker.ts`.
+- `app/` — routes: `/`, `/login`, `/admin/dashboard`, `/tools/texture-optimizer`; `app/robots.ts` disallows `/admin` + `/login`.
+- `e2e/` — Playwright specs (smoke + auth guards). `playwright.config.ts` uses `npm run build && npm run start` as webServer.
+- `supabase/migrations/` — DB schema is the source of truth; never hand-edit the remote DB.
+
+## 6. Windows dev environment
+- Use `npm.cmd` / `npx.cmd`: the PowerShell execution policy blocks the `.ps1` shims.
+- PowerShell 5.1 quirks to work around: no `-SkipHttpErrorCheck` on `Invoke-WebRequest`, read-only `$HOME`, missing `RandomNumberGenerator::Fill`.
+
+## 7. Security checklist (never skip)
+- Never commit `.env*` content or secrets; only placeholders in `.env.example` are tracked. Real env lives in git-ignored `.env.local`.
+- Only `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` (public by design) reach the browser. Service role key and DB password are tooling/server-only, never in Vercel env nor commits.
+- `SUPABASE_DB_PASSWORD` feeds the local Supabase CLI (link/db push); keep it out of any app runtime env.
+- `role` and RLS are never bypassable client-side: rely on `is_admin()` (SECURITY DEFINER) + column-level grants; ship schema changes as migrations.
+- Redirect targets (e.g. `?next=`) must be internal absolute paths (`/…`), never `//…` or `\…`.
+
+## 8. Testing strategy
+- E2E (Playwright) is the only supported way to test async Server Components, proxy redirects, and route guards — unit tests do not cover async RSC.
+- Write/update an `e2e/` spec when touching `proxy.ts`, `lib/supabase/middleware.ts`, auth forms, or route protection. Keep specs env-agnostic so they pass with or without `.env.local`.
