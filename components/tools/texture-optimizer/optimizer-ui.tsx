@@ -80,11 +80,19 @@ export function OptimizerUI() {
   >([]);
   const [presetName, setPresetName] = useState("");
   const [isDragging, setIsDragging] = useState(false);
+  // Local text copies of the dimension inputs so users can clear the field
+  // while typing; the parsed value is committed on blur.
+  const [maxWidthText, setMaxWidthText] = useState(String(DEFAULT_SETTINGS.maxWidth));
+  const [maxHeightText, setMaxHeightText] = useState(String(DEFAULT_SETTINGS.maxHeight));
 
   const workerRef = useRef<Worker | null>(null);
   const jobIdRef = useRef<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const outputBitmapRef = useRef<ImageBitmap | null>(null);
+  // Latest selected format, readable from the worker onmessage closure.
+  const downloadFormatRef = useRef<Result["format"]>("image/png");
+  // Format the kept bitmap was last encoded to, to skip redundant re-encodes.
+  const encodedFormatRef = useRef<Result["format"] | null>(null);
 
   const isBusy = phase === "processing";
 
@@ -106,6 +114,11 @@ export function OptimizerUI() {
         }
         const message = event.data;
         if (message.jobId !== jobIdRef.current) {
+          // Stale response (abandoned/cancelled job): release any transferred
+          // bitmap so the worker's output does not leak.
+          if ("output" in message && message.output instanceof ImageBitmap) {
+            message.output.close();
+          }
           return;
         }
 
@@ -122,7 +135,7 @@ export function OptimizerUI() {
           }
           outputBitmapRef.current?.close();
           outputBitmapRef.current = message.output;
-          canvas.convertToBlob({ type: "image/png" }).then((blob) => {
+          canvas.convertToBlob({ type: downloadFormatRef.current }).then((blob) => {
             if (disposed || jobIdRef.current === null) {
               return;
             }
@@ -131,9 +144,11 @@ export function OptimizerUI() {
               width: message.outputWidth,
               height: message.outputHeight,
               bytes: blob.size,
-              format: "image/png",
+              format: downloadFormatRef.current,
             });
-            setDownloadFormat("image/png");
+            // Remember which format the kept bitmap was encoded to, so the
+            // re-encode effect skips the identical format on mount/phase change.
+            encodedFormatRef.current = downloadFormatRef.current;
             setPhase("done");
             jobIdRef.current = null;
           });
@@ -154,10 +169,19 @@ export function OptimizerUI() {
     };
   }, []);
 
-  // Re-encode the kept bitmap when the user picks a different download format.
+  // Keep the latest format selectable in the worker onmessage closure.
+  useEffect(() => {
+    downloadFormatRef.current = downloadFormat;
+  }, [downloadFormat]);
+
+  // Re-encode the kept bitmap when the user picks a different download format,
+  // skipping it when the bitmap is already in the selected format.
   useEffect(() => {
     const bitmap = outputBitmapRef.current;
     if (!bitmap || phase !== "done") {
+      return;
+    }
+    if (encodedFormatRef.current === downloadFormat) {
       return;
     }
     let cancelled = false;
@@ -174,6 +198,7 @@ export function OptimizerUI() {
             return current;
           }
           URL.revokeObjectURL(current.objectUrl);
+          encodedFormatRef.current = downloadFormat;
           return {
             ...current,
             objectUrl: URL.createObjectURL(blob),
@@ -208,6 +233,8 @@ export function OptimizerUI() {
 
   function handleFiles(files: FileList | null) {
     const selected = files?.[0];
+    // Cancel any in-flight job so an old result cannot override the UI.
+    abandonJob();
     if (!selected || !selected.type.startsWith("image/")) {
       setFile(null);
       setResult(null);
@@ -234,6 +261,8 @@ export function OptimizerUI() {
       return;
     }
     setSettings({ ...preset.settings });
+    setMaxWidthText(String(preset.settings.maxWidth));
+    setMaxHeightText(String(preset.settings.maxHeight));
     setActivePresetId(presetId);
   }
 
@@ -243,6 +272,23 @@ export function OptimizerUI() {
   ) {
     setSettings((current) => ({ ...current, [key]: value }));
     setActivePresetId(null);
+  }
+
+  function commitDimension(
+    key: "maxWidth" | "maxHeight",
+    text: string,
+    fallback: number,
+  ) {
+    const parsed = Math.round(Number(text));
+    if (key === "maxWidth") {
+      const value = Number.isFinite(parsed) && parsed > 0 ? Math.min(2048, Math.max(16, parsed)) : fallback;
+      setMaxWidthText(String(value));
+      updateSetting(key, value);
+    } else {
+      const value = Number.isFinite(parsed) && parsed > 0 ? Math.min(2048, Math.max(16, parsed)) : fallback;
+      setMaxHeightText(String(value));
+      updateSetting(key, value);
+    }
   }
 
   function runOptimize() {
@@ -257,6 +303,7 @@ export function OptimizerUI() {
     }
     outputBitmapRef.current?.close();
     outputBitmapRef.current = null;
+    encodedFormatRef.current = null;
     setResult(null);
     setError(null);
     setProgress(0);
@@ -280,9 +327,29 @@ export function OptimizerUI() {
     worker.postMessage({ type: "cancel", jobId: jobIdRef.current });
   }
 
+  function abandonJob() {
+    const worker = workerRef.current;
+    if (!worker || !jobIdRef.current) {
+      return;
+    }
+    // Tell the worker to stop, and drop the job id so any late `canceled` or
+    // `done` response for the old job is ignored by the message handler.
+    worker.postMessage({ type: "cancel", jobId: jobIdRef.current });
+    jobIdRef.current = null;
+  }
+
   async function handleSavePreset() {
+    const trimmed = presetName.trim();
+    if (
+      customPresets.some(
+        (preset) => preset.name.toLowerCase() === trimmed.toLowerCase(),
+      )
+    ) {
+      setError("A preset with this name already exists.");
+      return;
+    }
     try {
-      const next = await saveCustomPreset(presetName, settings);
+      const next = await saveCustomPreset(trimmed, settings);
       setCustomPresets(next);
       setPresetName("");
     } catch (presetError) {
@@ -527,13 +594,19 @@ export function OptimizerUI() {
                 type="number"
                 min={16}
                 max={2048}
-                value={settings.maxWidth}
-                onChange={(event) =>
-                  updateSetting(
-                    "maxWidth",
-                    Number(event.target.value) || settings.maxWidth,
-                  )
+                inputMode="numeric"
+                value={maxWidthText}
+                onChange={(event) => {
+                  setMaxWidthText(event.target.value);
+                }}
+                onBlur={() =>
+                  commitDimension("maxWidth", maxWidthText, settings.maxWidth)
                 }
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.currentTarget.blur();
+                  }
+                }}
                 className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-orange-400 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950"
               />
             </label>
@@ -545,13 +618,19 @@ export function OptimizerUI() {
                 type="number"
                 min={16}
                 max={2048}
-                value={settings.maxHeight}
-                onChange={(event) =>
-                  updateSetting(
-                    "maxHeight",
-                    Number(event.target.value) || settings.maxHeight,
-                  )
+                inputMode="numeric"
+                value={maxHeightText}
+                onChange={(event) => {
+                  setMaxHeightText(event.target.value);
+                }}
+                onBlur={() =>
+                  commitDimension("maxHeight", maxHeightText, settings.maxHeight)
                 }
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.currentTarget.blur();
+                  }
+                }}
                 className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-orange-400 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950"
               />
             </label>
@@ -606,13 +685,18 @@ export function OptimizerUI() {
                 max={1}
                 step={0.05}
                 value={settings.ditherStrength}
+                disabled={
+                  !isUnlocked || settings.dithering === "none"
+                }
                 onChange={(event) =>
                   updateSetting("ditherStrength", Number(event.target.value))
                 }
-                className="mt-2 w-full accent-orange-500"
+                className="mt-2 w-full accent-orange-500 disabled:opacity-50"
               />
               <span className="mt-1 block text-xs text-zinc-500">
-                {Math.round(settings.ditherStrength * 100)}%
+                {settings.dithering === "none"
+                  ? "Not used with \"None\" dithering."
+                  : `${Math.round(settings.ditherStrength * 100)}%`}
               </span>
             </label>
           </fieldset>
@@ -630,6 +714,8 @@ export function OptimizerUI() {
                 value={presetName}
                 onChange={(event) => setPresetName(event.target.value)}
                 placeholder="Preset name"
+                maxLength={60}
+                aria-label="Preset name"
                 className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-orange-400 dark:border-zinc-700 dark:bg-zinc-950"
               />
               <button
@@ -649,7 +735,11 @@ export function OptimizerUI() {
                   >
                     <button
                       type="button"
-                      onClick={() => setSettings({ ...preset.settings })}
+                      onClick={() => {
+                        setSettings({ ...preset.settings });
+                        setMaxWidthText(String(preset.settings.maxWidth));
+                        setMaxHeightText(String(preset.settings.maxHeight));
+                      }}
                       className="text-sm font-medium text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-50"
                     >
                       {preset.name}

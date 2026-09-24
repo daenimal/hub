@@ -97,6 +97,11 @@ function buildColorHistogram(data: Uint8ClampedArray, step = 1): Map<number, num
   const pxCount = data.length / 4;
   for (let i = 0; i < pxCount; i += step) {
     const offset = i * 4;
+    // Skip fully transparent pixels: their RGB is typically garbage or black
+    // and would pollute the palette with invisible colors.
+    if (data[offset + 3] < 8) {
+      continue;
+    }
     const key =
       ((data[offset] << 16) | (data[offset + 1] << 8) | data[offset + 2]) >>> 0;
     histogram.set(key, (histogram.get(key) ?? 0) + 1);
@@ -206,6 +211,11 @@ function applyFloydSteinberg(
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const i = (y * width + x) * 4;
+      // Leave fully transparent pixels untouched and prevent error diffusion
+      // through them, which would bleed colors into the visible edges.
+      if (src[i + 3] < 8) {
+        continue;
+      }
       const r = src[i];
       const g = src[i + 1];
       const b = src[i + 2];
@@ -224,6 +234,9 @@ function applyFloydSteinberg(
           return;
         }
         const j = (yi * width + xi) * 4;
+        if (src[j + 3] < 8) {
+          return;
+        }
         src[j] = clampByte(src[j] + errR * factor);
         src[j + 1] = clampByte(src[j + 1] + errG * factor);
         src[j + 2] = clampByte(src[j + 2] + errB * factor);
@@ -248,6 +261,9 @@ function applyPointDithering(
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const i = (y * width + x) * 4;
+      if (data[i + 3] < 8) {
+        continue;
+      }
       const r = data[i];
       const g = data[i + 1];
       const b = data[i + 2];
@@ -328,6 +344,103 @@ function clampNum(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+/**
+ * Reads pixel dimensions straight from the file header (PNG/GIF/WebP/JPEG),
+ * without decoding the full image. Returns null for unknown formats.
+ */
+async function readHeaderDimensions(file: Blob): Promise<{ width: number; height: number } | null> {
+  const headBytes = new Uint8Array(await file.slice(0, 512).arrayBuffer());
+  const ascii = (i: number, len: number) =>
+    String.fromCharCode(...Array.from(headBytes.subarray(i, i + len)));
+
+  try {
+    // PNG: 8-byte signature, then IHDR width/height (big-endian at 16/20).
+    if (
+      headBytes.length >= 24 &&
+      headBytes[0] === 0x89 && headBytes[1] === 0x50 &&
+      headBytes[2] === 0x4e && headBytes[3] === 0x47
+    ) {
+      return {
+        width: readUint32BE(headBytes, 16),
+        height: readUint32BE(headBytes, 20),
+      };
+    }
+
+    // GIF: "GIF87a"/"GIF89a", width/height little-endian at 6/8.
+    if (headBytes.length >= 10 && ascii(0, 3) === "GIF") {
+      return {
+        width: headBytes[6] | (headBytes[7] << 8),
+        height: headBytes[8] | (headBytes[9] << 8),
+      };
+    }
+
+    // WebP: "RIFF....WEBP" container. Only the lossless (VP8L) and lossy
+    // (VP8) formats have dimensions within the first bytes.
+    if (
+      headBytes.length >= 30 &&
+      ascii(0, 4) === "RIFF" &&
+      ascii(8, 4) === "WEBP"
+    ) {
+      const tag = ascii(12, 4);
+      if (tag === "VP8L" && headBytes.length >= 25) {
+        // 1-byte signature then 4 bytes: 14-bit width-1, 14-bit height-1.
+        const bits = readUint32LE(headBytes, 21);
+        return {
+          width: (bits & 0x3fff) + 1,
+          height: ((bits >> 14) & 0x3fff) + 1,
+        };
+      }
+      if (tag === "VP8 " && headBytes.length >= 27) {
+        // 3-byte frame tag, then width/height as 14-bit little-endian.
+        return {
+          width: (headBytes[23] | ((headBytes[24] & 0x3f) << 8)) & 0x3fff,
+          height: (headBytes[25] | ((headBytes[26] & 0x3f) << 8)) & 0x3fff,
+        };
+      }
+    }
+
+    // JPEG: scan the marker segments for SOF0..SOF15 height/width.
+    if (headBytes.length >= 4 && headBytes[0] === 0xff && headBytes[1] === 0xd8) {
+      const softTable: Record<number, boolean> = {
+        0xc0: true, 0xc1: true, 0xc2: true, 0xc3: true,
+        0xc5: true, 0xc6: true, 0xc7: true,
+        0xc9: true, 0xca: true, 0xcb: true,
+        0xcd: true, 0xce: true, 0xcf: true,
+      };
+      let offset = 2;
+      while (offset + 9 < headBytes.length) {
+        if (headBytes[offset] !== 0xff) {
+          break;
+        }
+        const marker = headBytes[offset + 1];
+        if (marker === 0xd8 || marker === 0xd9 || marker === 0xda) {
+          break;
+        }
+        const segmentLength = (headBytes[offset + 2] << 8) | headBytes[offset + 3];
+        if (softTable[marker]) {
+          // Precision(1) then height(2) then width(2), big-endian.
+          return {
+            height: (headBytes[offset + 5] << 8) | headBytes[offset + 6],
+            width: (headBytes[offset + 7] << 8) | headBytes[offset + 8],
+          };
+        }
+        offset += 2 + segmentLength;
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function readUint32BE(bytes: Uint8Array, offset: number): number {
+  return ((bytes[offset] << 24) | (bytes[offset + 1] << 16) | (bytes[offset + 2] << 8) | bytes[offset + 3]) >>> 0;
+}
+
+function readUint32LE(bytes: Uint8Array, offset: number): number {
+  return (bytes[offset] | (bytes[offset + 1] << 8) | (bytes[offset + 2] << 16) | (bytes[offset + 3] << 24)) >>> 0;
+}
+
 async function runOptimize(request: OptimizeRequest): Promise<void> {
   const { jobId, file, settings } = request;
 
@@ -353,7 +466,34 @@ async function runOptimize(request: OptimizeRequest): Promise<void> {
 
   let source: ImageBitmap;
   try {
-    source = await createImageBitmap(file);
+    // When the header already tells us the pixel count is unsafe, bail out
+    // before decoding, avoiding a full-buffer allocation (~4 bytes/px).
+    const dims = await readHeaderDimensions(file);
+    if (dims && dims.width * dims.height > MAX_DECODE_PIXELS) {
+      post({
+        type: "error",
+        jobId,
+        message: "Image resolution is too high to process safely.",
+      });
+      return;
+    }
+    // When a downscale is needed, ask the decoder to resize natively (aspect
+    // preserved) so the full original bitmap is never allocated in memory.
+    let options: ImageBitmapOptions | undefined;
+    if (dims) {
+      const scale = Math.min(
+        1,
+        normalized.maxWidth / dims.width,
+        normalized.maxHeight / dims.height,
+      );
+      if (scale < 1) {
+        options = {
+          resizeWidth: Math.max(1, Math.round(dims.width * scale)),
+          resizeHeight: Math.max(1, Math.round(dims.height * scale)),
+        };
+      }
+    }
+    source = await createImageBitmap(file, options);
   } catch {
     post({ type: "error", jobId, message: "Could not decode the image." });
     return;
@@ -364,6 +504,8 @@ async function runOptimize(request: OptimizeRequest): Promise<void> {
     return;
   }
 
+  // Safety net for formats whose dimensions could not be read from the header
+  // (e.g. JPEG): the guard cannot run before decode, so keep it here too.
   if (source.width * source.height > MAX_DECODE_PIXELS) {
     post({
       type: "error",
@@ -484,13 +626,19 @@ self.onmessage = (event: MessageEvent<OptimizerRequest>) => {
   }
 
   if (event.data.type === "optimize") {
-    runOptimize(event.data).catch((error: unknown) => {
-      if (!cancelledJobs.has(jobId)) {
-        const message =
-          error instanceof Error ? error.message : "Optimization failed.";
-        post({ type: "error", jobId, message } satisfies ErrorResponse);
-      }
-    });
+    runOptimize(event.data)
+      .catch((error: unknown) => {
+        if (!cancelledJobs.has(jobId)) {
+          const message =
+            error instanceof Error ? error.message : "Optimization failed.";
+          post({ type: "error", jobId, message } satisfies ErrorResponse);
+        }
+      })
+      // Clean up the cancel marker once the job finally settles, so the set
+      // does not grow without bound across many runs.
+      .finally(() => {
+        cancelledJobs.delete(jobId);
+      });
   }
 };
 

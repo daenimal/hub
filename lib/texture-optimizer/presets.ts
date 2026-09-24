@@ -58,6 +58,13 @@ export const FREE_PRESETS: ToolPreset[] = [
 
 type StoredSettings = Record<string, unknown>;
 
+const DITHERINGS = ["none", "floyd-steinberg", "bayer", "ordered"] as const;
+type Dithering = (typeof DITHERINGS)[number];
+
+function isDithering(value: unknown): value is Dithering {
+  return typeof value === "string" && (DITHERINGS as readonly string[]).includes(value);
+}
+
 function isValidSettings(settings: StoredSettings | null | undefined): boolean {
   return (
     typeof settings === "object" &&
@@ -65,7 +72,8 @@ function isValidSettings(settings: StoredSettings | null | undefined): boolean {
     typeof settings.maxWidth === "number" &&
     typeof settings.maxHeight === "number" &&
     typeof settings.quantizeColors === "number" &&
-    typeof settings.dithering === "string"
+    typeof settings.ditherStrength === "number" &&
+    isDithering(settings.dithering)
   );
 }
 
