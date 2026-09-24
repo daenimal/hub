@@ -5,7 +5,7 @@ import { getSupabaseConfig } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
-  title: "Dashboard Admin | MicroHub",
+  title: "Admin Dashboard | MicroHub",
   robots: { index: false },
 };
 
@@ -38,46 +38,46 @@ export default async function AdminDashboardPage() {
     <div className="mx-auto w-full max-w-6xl flex-1 px-4 py-12 sm:px-6">
       <header className="pb-10">
         <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300">
-          Area riservata
+          Restricted area
         </span>
         <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">
-          Dashboard Admin
+          Admin Dashboard
         </h1>
         <p className="mt-3 max-w-2xl text-base leading-7 text-zinc-600 dark:text-zinc-400">
-          Benvenuto{profile.full_name ? `, ${profile.full_name}` : ""}. Da qui
-          gestirai profili, limiti d&apos;uso e configurazione dei tool.
+          Welcome{profile.full_name ? `, ${profile.full_name}` : ""}. From
+          here you&apos;ll manage profiles, usage limits, and tool config.
         </p>
       </header>
 
       <section className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         <div className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-            Profilo
+            Profile
           </h2>
           <p className="mt-2 truncate text-sm font-semibold">{profile.email}</p>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">
-            Ruolo: admin - registrato il{" "}
-            {new Date(profile.created_at).toLocaleDateString("it-IT")}
+            Role: admin - registered on{" "}
+            {new Date(profile.created_at).toLocaleDateString("en-GB")}
           </p>
         </div>
 
         <div className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-            Sicurezza
+            Security
           </h2>
           <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-            Questa rotta è protetta su tre livelli: Client Guard, Proxy di
-            Next.js e RLS/`is_admin()` su database.
+            This route is protected on three levels: Client Guard, Next.js
+            Proxy, and RLS/`is_admin()` at the database.
           </p>
         </div>
 
         <div className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-            Gestione utenti
+            User management
           </h2>
           <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-            La gestione avanzata dei profili verrà aggiunta con il prossimo
-            vertical slice.
+            Advanced profile management will be added with the next vertical
+            slice.
           </p>
         </div>
       </section>

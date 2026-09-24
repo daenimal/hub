@@ -50,8 +50,8 @@ export function OptimizerUI() {
       <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
         <h2 className="text-lg font-semibold tracking-tight">Input</h2>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Carica una texture o un&apos;immagine. Tutta la manipolazione dei
-          pixel avviene in un Web Worker, senza bloccare la pagina.
+          Upload a texture or an image. All pixel manipulation runs in a Web
+          Worker, without blocking the page.
         </p>
 
         <button
@@ -87,7 +87,7 @@ export function OptimizerUI() {
             />
           </svg>
           <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-            Trascina qui l&apos;immagine oppure clicca per selezionarla
+            Drag and drop an image here, or click to select one
           </span>
           <span className="text-xs text-zinc-500 dark:text-zinc-500">
             PNG, JPG, WebP, GIF
@@ -110,21 +110,21 @@ export function OptimizerUI() {
           </p>
         ) : (
           <p className="mt-4 text-sm text-zinc-500 dark:text-zinc-500">
-            Nessun file selezionato.
+            No file selected.
           </p>
         )}
       </section>
 
       <aside className="space-y-6">
         <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="text-lg font-semibold tracking-tight">Impostazioni</h2>
+          <h2 className="text-lg font-semibold tracking-tight">Settings</h2>
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            I controlli verranno attivati con il pipeline di ottimizzazione.
+            Controls will be enabled with the optimization pipeline.
           </p>
           <div className="mt-5 space-y-4">
             <label className="block">
               <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Colori (quantizzazione)
+                Colors (quantization)
               </span>
               <input
                 type="range"
@@ -145,7 +145,7 @@ export function OptimizerUI() {
               >
                 <option>Floyd-Steinberg</option>
                 <option>Bayer</option>
-                <option>Nessuno</option>
+                <option>None</option>
               </select>
             </label>
           </div>
@@ -166,17 +166,17 @@ export function OptimizerUI() {
               }`}
             />
             {workerStatus === "ready"
-              ? "Web Worker attivo e pronto"
+              ? "Web Worker active and ready"
               : workerStatus === "checking"
-                ? "Verifica del Web Worker..."
-                : "Errore di inizializzazione del Web Worker"}
+                ? "Checking the Web Worker..."
+                : "Web Worker initialization failed"}
           </p>
           <button
             type="button"
             disabled
             className="mt-4 w-full cursor-not-allowed rounded-lg bg-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
           >
-            Ottimizza (presto disponibile)
+            Optimize (coming soon)
           </button>
         </section>
       </aside>

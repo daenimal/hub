@@ -4,9 +4,9 @@ test("homepage shows hero and tool cards", async ({ page }) => {
   await page.goto("/");
   await expect(
     page.getByRole("heading", { level: 1 }),
-  ).toContainText("Micro utility");
+  ).toContainText("Micro utilities");
   await expect(
-    page.getByText("Ottimizzatore di Texture / Stile Retrò"),
+    page.getByText("Texture / Retro-Style Optimizer"),
   ).toBeVisible();
 });
 
@@ -16,7 +16,7 @@ test("navigation to the texture optimizer tool works", async ({ page }) => {
   await expect(page).toHaveURL(/\/tools\/texture-optimizer/);
   await expect(
     page.getByRole("heading", { level: 1 }),
-  ).toContainText("Ottimizzatore di Texture");
+  ).toContainText("Texture / Retro-Style Optimizer");
 });
 
 test("robots.txt disallows admin and login", async ({ request }) => {

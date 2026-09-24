@@ -23,7 +23,7 @@ export default function GlobalError({
         path: window.location.pathname,
       }),
     }).catch(() => {
-      // errore di segnalazione ignorato
+      // reporting failure intentionally ignored
     });
   }, [error]);
 
@@ -33,17 +33,17 @@ export default function GlobalError({
         <div className="flex min-h-screen items-center justify-center bg-white px-4">
           <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-8 text-center shadow-sm">
             <h2 className="text-lg font-semibold tracking-tight">
-              Qualcosa è andato storto
+              Something went wrong
             </h2>
             <p className="mt-2 text-sm text-zinc-600">
-              L&apos;errore è stato segnalato automaticamente.
+              The error was reported automatically.
             </p>
             <button
               type="button"
               onClick={retry}
               className="mt-6 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-700"
             >
-              Riprova
+              Try again
             </button>
           </div>
         </div>

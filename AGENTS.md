@@ -22,6 +22,7 @@ Keep diffs minimal. Do not run `npm audit`, upgrade deps, or reformat unrelated 
 
 ## 1. Project Overview & Core Philosophy
 - **Project:** Personal Micro-Utility Hub (Client-side focused tools for developers, 3D artists, and creators).
+- **Language:** English is the project's primary language. All UI copy, metadata, error messages, docs, and test assertions must be written in English (reply to the user in the language they use).
 - **Architecture:** Modular Monolith with a Serverless Stack.
 - **Cost Target:** 0€ operational cost (using free tiers of Vercel/Cloudflare Pages, Supabase, and Lemon Squeezy).
 - **Rule #1:** Avoid over-engineering. Build the first tool end-to-end before expanding the hub structure.

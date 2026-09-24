@@ -3,9 +3,9 @@ import type { Metadata } from "next";
 import { OptimizerUI } from "@/components/tools/texture-optimizer/optimizer-ui";
 
 export const metadata: Metadata = {
-  title: "Ottimizzatore di Texture / Stile Retrò | MicroHub",
+  title: "Texture / Retro-Style Optimizer | MicroHub",
   description:
-    "Riduci il peso delle texture e applica uno stile retrò (palette limitate e dithering). L'elaborazione avviene interamente nel browser, in un Web Worker.",
+    "Cut texture weight and apply a retro style (limited palettes and dithering). Processing happens entirely in the browser, in a Web Worker.",
 };
 
 export default function TextureOptimizerPage() {
@@ -16,13 +16,12 @@ export default function TextureOptimizerPage() {
           Tool 1
         </span>
         <h1 className="mt-4 max-w-2xl text-3xl font-bold tracking-tight sm:text-4xl">
-          Ottimizzatore di Texture / Stile Retrò
+          Texture / Retro-Style Optimizer
         </h1>
         <p className="mt-3 max-w-2xl text-base leading-7 text-zinc-600 dark:text-zinc-400">
-          Riduci il peso di texture e immagini applicando quantizzazione del
-          colore e dithering per un look retrò. Nessun upload al server: i
-          pixel vengono elaborati localmente via OffscreenCanvas in un Web
-          Worker.
+          Cut the weight of textures and images by applying color
+          quantization and dithering for a retro look. No uploads to a server:
+          pixels are processed locally via OffscreenCanvas in a Web Worker.
         </p>
       </header>
 

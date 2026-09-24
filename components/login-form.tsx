@@ -35,7 +35,7 @@ function LoginFormInner() {
 
     if (!getSupabaseConfig()) {
       setError(
-        "Autenticazione non configurata: imposta le variabili d'ambiente Supabase.",
+        "Auth is not configured: set the Supabase environment variables.",
       );
       setIsSubmitting(false);
       return;
@@ -48,7 +48,7 @@ function LoginFormInner() {
     });
 
     if (error) {
-      setError("Credenziali non valide. Riprova.");
+      setError("Invalid credentials. Try again.");
       setIsSubmitting(false);
       return;
     }
@@ -63,9 +63,9 @@ function LoginFormInner() {
       className="w-full max-w-sm space-y-4 rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
     >
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">Accedi</h1>
+        <h1 className="text-xl font-semibold tracking-tight">Sign in</h1>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Usa le tue credenziali per accedere all&apos;hub.
+          Use your credentials to access the hub.
         </p>
       </div>
 
@@ -108,7 +108,7 @@ function LoginFormInner() {
         disabled={isSubmitting}
         className="w-full rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:opacity-50 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
       >
-        {isSubmitting ? "Accesso..." : "Accedi"}
+        {isSubmitting ? "Signing in..." : "Sign in"}
       </button>
     </form>
   );
@@ -119,7 +119,7 @@ export function LoginForm() {
     <Suspense
       fallback={
         <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-8 dark:border-zinc-800 dark:bg-zinc-900">
-          Caricamento...
+          Loading...
         </div>
       }
     >

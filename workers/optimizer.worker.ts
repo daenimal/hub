@@ -67,7 +67,7 @@ self.onmessage = (event: MessageEvent<OptimizerRequest>) => {
     postMessage({
       type: "error",
       jobId,
-      message: "Il pipeline di ottimizzazione non è ancora implementato.",
+      message: "The optimization pipeline is not implemented yet.",
     } satisfies ErrorResponse);
   }
 };

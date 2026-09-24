@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { LoginForm } from "@/components/login-form";
 
 export const metadata: Metadata = {
-  title: "Accedi | MicroHub",
+  title: "Sign in | MicroHub",
 };
 
 export default function LoginPage() {
