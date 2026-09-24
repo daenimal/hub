@@ -1,69 +1,182 @@
-import Image from "next/image";
+import { ToolCard } from "@/components/tool-card";
+
+const comingSoonTools = [
+  {
+    title: "Compressore PNG",
+    description:
+      "Ottimizza e comprime immagini PNG prescindendo da servizi esterni, tutto in locale nel browser.",
+    badge: "Coming Soon",
+    icon: (
+      <svg
+        className="size-5"
+        fill="none"
+        viewBox="0 0 24 24"
+        strokeWidth={1.8}
+        stroke="currentColor"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5"
+        />
+      </svg>
+    ),
+  },
+  {
+    title: "Estrattore Palette",
+    description:
+      "Ricava automaticamente le palette colore dominanti da qualsiasi immagine o texture.",
+    badge: "Coming Soon",
+    icon: (
+      <svg
+        className="size-5"
+        fill="none"
+        viewBox="0 0 24 24"
+        strokeWidth={1.8}
+        stroke="currentColor"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M12 21a9 9 0 1 1 9-9c0 2.5-2 3.5-3.5 3.5H15a2 2 0 0 0-1.5 3.3c.3.4.5.8.5 1.2 0 .6-.4 1-1 1Z"
+        />
+        <circle cx="7.5" cy="10.5" r="1" fill="currentColor" />
+        <circle cx="10.5" cy="7.5" r="1" fill="currentColor" />
+        <circle cx="14.5" cy="7.5" r="1" fill="currentColor" />
+      </svg>
+    ),
+  },
+  {
+    title: "Generatore Normal Map",
+    description:
+      "Genera normal map e height map da immagini 2D per materiali PBR ed engine di gioco.",
+    badge: "Coming Soon",
+    icon: (
+      <svg
+        className="size-5"
+        fill="none"
+        viewBox="0 0 24 24"
+        strokeWidth={1.8}
+        stroke="currentColor"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M3.75 20.25 20.25 3.75M3.75 3.75h6m-6 6v.75m12 .75 2.25-2.25m-6-6 2.25 2.25"
+        />
+      </svg>
+    ),
+  },
+  {
+    title: "Studio Dithering",
+    description:
+      "Applica algoritmi di dithering (Bayer, Floyd-Steinberg) alle immagini per look retrò.",
+    badge: "Coming Soon",
+    icon: (
+      <svg
+        className="size-5"
+        fill="none"
+        viewBox="0 0 24 24"
+        strokeWidth={1.8}
+        stroke="currentColor"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M3.75 8.25h16.5M3.75 15.75h16.5M12 3.75v16.5M8.25 16.5A4.5 4.5 0 0 1 12 12a4.5 4.5 0 0 1 3.75 4.5"
+        />
+      </svg>
+    ),
+  },
+  {
+    title: "Convertitore ASCII",
+    description:
+      "Trasforma foto e texture in arte ASCII interattiva con livelli di dettaglio regolabili.",
+    badge: "Coming Soon",
+    icon: (
+      <svg
+        className="size-5"
+        fill="none"
+        viewBox="0 0 24 24"
+        strokeWidth={1.8}
+        stroke="currentColor"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M6 6h12M6 12h12M6 18h8"
+        />
+      </svg>
+    ),
+  },
+  {
+    title: "Ottimizzatore WebP",
+    description:
+      "Riduci il peso di immagini e texture convertendole in WebP/AVIF con controllo qualità.",
+    badge: "Coming Soon",
+    icon: (
+      <svg
+        className="size-5"
+        fill="none"
+        viewBox="0 0 24 24"
+        strokeWidth={1.8}
+        stroke="currentColor"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M4.5 12h15m-6.75-6.75 6.75 6.75-6.75 6.75"
+        />
+      </svg>
+    ),
+  },
+];
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <div className="mx-auto w-full max-w-6xl flex-1 px-4 py-12 sm:px-6">
+      <section className="flex flex-col items-center pb-12 text-center">
+        <span className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-medium text-orange-700 dark:border-orange-900 dark:bg-orange-950/50 dark:text-orange-300">
+          Strumenti in-browser, zero costi di server
+        </span>
+        <h1 className="mt-6 max-w-2xl text-4xl font-bold tracking-tight sm:text-5xl">
+          Micro utility per creatori e sviluppatori
+        </h1>
+        <p className="mt-4 max-w-xl text-base leading-7 text-zinc-600 dark:text-zinc-400">
+          Una raccolta personale di mini-strumenti veloci, potenti e lato-client.
+          Nessun upload a server: tutto gira nel tuo browser.
+        </p>
+      </section>
+
+      <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <ToolCard
+          title="Ottimizzatore di Texture / Stile Retrò"
+          description="Riduci il peso delle texture e applica stile retrò (palette limitate, dithering) elaborando i pixel in un Web Worker senza bloccare la UI."
+          badge="In sviluppo"
+          href="/tools/texture-optimizer"
+          icon={
+            <svg
+              className="size-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.8}
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 21a9 9 0 1 1 9-9c0 2.5-2 3.5-3.5 3.5H15a2 2 0 0 0-1.5 3.3c.3.4.5.8.5 1.2 0 .6-.4 1-1 1Z"
+              />
+              <circle cx="7.5" cy="10.5" r="1" fill="currentColor" />
+              <circle cx="10.5" cy="7.5" r="1" fill="currentColor" />
+              <circle cx="14.5" cy="7.5" r="1" fill="currentColor" />
+            </svg>
+          }
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+        {comingSoonTools.map((tool) => (
+          <ToolCard key={tool.title} {...tool} />
+        ))}
+      </section>
     </div>
   );
 }

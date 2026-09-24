@@ -1,36 +1,54 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# MicroHub
 
-## Getting Started
+Personal in-browser micro-utility hub for developers, 3D artists, and creators.
 
-First, run the development server:
+Stack: Next.js 16 (App Router) + TypeScript + Tailwind CSS v4 + Supabase (PostgreSQL, Auth, RLS). Cost target: 0€ operational (Vercel/Cloudflare Pages free tier, Supabase free tier, Lemon Squeezy).
+
+## Getting started
 
 ```bash
+npm install
+cp .env.example .env.local
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000). Every page is fully client-side where possible; heavy pixel work runs in a Web Worker.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+See `.env.example`. Required keys:
 
-## Learn More
+- `NEXT_PUBLIC_SUPABASE_URL` - Supabase project URL
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Supabase anonymous key
 
-To learn more about Next.js, take a look at the following resources:
+Optional (future server-side work): `SUPABASE_SERVICE_ROLE_KEY` and a raw `DATABASE_URL` (PgBouncer transaction mode, port `6543`, `?pgbouncer=true`, prepared statements disabled).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Database & migrations
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+All schema changes live in `/supabase/migrations/` and are applied via the Supabase CLI (or SQL editor):
 
-## Deploy on Vercel
+```bash
+npx supabase link --project-ref your-project-ref
+npx supabase db push
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The initial migration `001_initial_schema.sql` creates:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `profiles` linked to `auth.users` with a `role` column (`CHECK (role IN ('user','admin'))`)
+- `is_admin()` security-definer function used by RLS policies and admin guards
+- RLS: users read/update their own profile; admins read/update all profiles; no client-side role escalation (column-level grants)
+- Auto-creation of profiles on signup
+
+## Security model
+
+Admin routes are protected on three tiers:
+
+1. **Client Guard** - the Navbar only shows the Admin link to admins
+2. **Routing** - `proxy.ts` (Next.js 16 proxy, formerly middleware) refreshes the session and redirects unauthorized users
+3. **Data** - SQL RLS + `is_admin()` enforce rules at the database level
+
+## Tool 1: Optimizer di Texture / Stile Retrò
+
+Route: `/tools/texture-optimizer`. Pixel manipulation (quantization, dithering, resizing) runs off the main thread in `workers/optimizer.worker.ts` (OffscreenCanvas), instantiated via `lib/texture-optimizer/worker.ts`.
+
+See `AGENTS.md` for the binding architecture guidelines for all future work.
