@@ -71,7 +71,9 @@ Keep diffs minimal. Do not run `npm audit`, upgrade deps, or reformat unrelated 
 - `lib/supabase/` — `client.ts` (browser), `server.ts` (RSC), `middleware.ts` (proxy session), `env.ts` (config guard, null when env missing), `types.ts` (DB types).
 - `components/` — shared UI; `components/tools/texture-optimizer/` is Tool 1's client UI.
 - `workers/optimizer.worker.ts` — pixel pipeline (OffscreenCanvas + Web Worker), wired via `lib/texture-optimizer/worker.ts`.
-- `app/` — routes: `/`, `/login`, `/admin/dashboard`, `/tools/texture-optimizer`; `app/robots.ts` disallows `/admin` + `/login`.
+- `app/` — routes: `/`, `/login`, `/admin/dashboard`, `/tools/texture-optimizer`, `/api/log` (error intake); `app/robots.ts` disallows `/admin` + `/login`.
+- `instrumentation.ts` — server/proxy error capture via `onRequestError`; `lib/observability/report.ts` sanitizes + writes to `app_errors` table.
+- `scripts/weekly-report.mjs` + `.github/workflows/weekly-monitoring.yml` — weekly error/deploy report posted as a GitHub issue (cron `0 8 * * 1`).
 - `e2e/` — Playwright specs (smoke + auth guards). `playwright.config.ts` uses `npm run build && npm run start` as webServer.
 - `supabase/migrations/` — DB schema is the source of truth; never hand-edit the remote DB.
 
