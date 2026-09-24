@@ -99,3 +99,26 @@ test("texture optimizer cancel stops a running job", async ({ page }) => {
     timeout: 15_000,
   });
 });
+
+test("anonymous visitors see locked advanced settings", async ({ page }) => {
+  await page.goto("/tools/texture-optimizer");
+
+  const panel = page.locator("section", {
+    has: page.getByRole("heading", { name: "Advanced settings" }),
+  });
+  await expect(panel.getByText("Sign in to unlock")).toBeVisible();
+  await expect(
+    panel.getByLabel("Colors (quantization)"),
+  ).toBeDisabled();
+});
+
+test("free preset applies a fixed configuration", async ({ page }) => {
+  await page.goto("/tools/texture-optimizer");
+  await page.getByRole("button", { name: /PS1 Classic/i }).click();
+
+  const settings = page.locator(
+    "section",
+    { has: page.getByRole("heading", { name: "Advanced settings" }) },
+  );
+  await expect(settings.getByText("32 colors", { exact: true })).toBeVisible();
+});

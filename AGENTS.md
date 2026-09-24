@@ -70,9 +70,9 @@ Keep diffs minimal. Do not run `npm audit`, upgrade deps, or reformat unrelated 
 ## 5. Project Map (read these, don't explore blindly)
 - `proxy.ts` — Next.js Proxy (v16, replaces `middleware.ts`) -> route guard in `lib/supabase/middleware.ts` (redirects, admin check).
 - `lib/supabase/` — `client.ts` (browser), `server.ts` (RSC), `middleware.ts` (proxy session), `env.ts` (config guard, null when env missing), `types.ts` (DB types).
-- `components/` — shared UI; `components/tools/texture-optimizer/optimizer-ui.tsx` is Tool 1's client UI (state machine: idle/processing/done/error/canceled; progress, cancel, preview, presets).
+- `components/` — shared UI; `components/tools/texture-optimizer/optimizer-ui.tsx` is Tool 1's client UI (state machine: idle/processing/done/error/canceled; progress, cancel, preview, presets). Free vs premium gating: anonymous users can only pick the fixed `FREE_PRESETS`; the advanced panel (custom colors, dither strength, resolution) and custom preset saving are locked behind a signed-in account (see `lib/supabase/use-auth.ts`).
 - `lib/tools/registry.tsx` — the tool list used by the homepage (single source of truth: `tools`, `getTool`, `toolBadge`).
-- `workers/optimizer.worker.ts` — complete pixel pipeline (decode, downscale, median-cut quantization, Floyd-Steinberg/Bayer/ordered dithering, progress, per-job cancel, size guardrails), wired via `lib/texture-optimizer/worker.ts`; presets live in `lib/texture-optimizer/presets.ts` (DB if signed in, localStorage fallback).
+- `workers/optimizer.worker.ts` — complete pixel pipeline (decode, downscale, median-cut quantization, Floyd-Steinberg/Bayer/ordered dithering with `ditherStrength` 0..1, progress, per-job cancel, size guardrails, input-settings validation), wired via `lib/texture-optimizer/worker.ts`; free presets + signed-in preset persistence live in `lib/texture-optimizer/presets.ts`.
 - `app/` — routes: `/`, `/login`, `/admin/dashboard`, `/tools/texture-optimizer`, `/api/log` (error intake); `app/robots.ts` disallows `/admin` + `/login`.
 - `instrumentation.ts` — server/proxy error capture via `onRequestError`; `lib/observability/report.ts` sanitizes + writes to `app_errors` table.
 - `scripts/weekly-report.mjs` + `.github/workflows/weekly-monitoring.yml` — weekly error/deploy report posted as a GitHub issue (cron `0 8 * * 1`).

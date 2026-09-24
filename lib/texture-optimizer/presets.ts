@@ -7,68 +7,61 @@ export type ToolPreset = {
   name: string;
   settings: OptimizeSettings;
   visibility: "private" | "public";
-};
-
-type StoredPreset = {
-  id: string;
-  name: string;
-  settings: Record<string, unknown>;
+  /** Built-in presets are fixed and available to everyone. */
+  builtin?: boolean;
 };
 
 const TOOL_ID = "texture-optimizer";
-const STORAGE_KEY = "microhub.presets.texture-optimizer";
 
-function readLocalPresets(): StoredPreset[] {
-  if (typeof window === "undefined") {
-    return [];
-  }
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return [];
-    }
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
+/** Free presets: fixed settings, usable by anyone. */
+export const FREE_PRESETS: ToolPreset[] = [
+  {
+    id: "preset-ps1",
+    name: "PS1 Classic",
+    settings: {
+      maxWidth: 512,
+      maxHeight: 512,
+      quantizeColors: 32,
+      dithering: "bayer",
+      ditherStrength: 1,
+    },
+    visibility: "public",
+    builtin: true,
+  },
+  {
+    id: "preset-gameboy",
+    name: "GameBoy 4-Color",
+    settings: {
+      maxWidth: 256,
+      maxHeight: 256,
+      quantizeColors: 4,
+      dithering: "ordered",
+      ditherStrength: 1,
+    },
+    visibility: "public",
+    builtin: true,
+  },
+  {
+    id: "preset-lowres16",
+    name: "Low-Res 16-Color",
+    settings: {
+      maxWidth: 64,
+      maxHeight: 64,
+      quantizeColors: 16,
+      dithering: "floyd-steinberg",
+      ditherStrength: 1,
+    },
+    visibility: "public",
+    builtin: true,
+  },
+];
 
-function writeLocalPresets(presets: StoredPreset[]): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(presets));
-}
+type StoredSettings = Record<string, unknown>;
 
-async function isAuthenticated(): Promise<boolean> {
-  try {
-    if (!getSupabaseConfig()) {
-      return false;
-    }
-    const supabase = createClient();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    return Boolean(session);
-  } catch {
-    return false;
-  }
-}
-
-function fromStored(presets: StoredPreset[]): ToolPreset[] {
-  return presets
-    .filter((p) => isValidSettings(p.settings))
-    .map((p) => ({
-      id: p.id,
-      name: p.name,
-      settings: p.settings as OptimizeSettings,
-      visibility: "private",
-    }));
-}
-
-function isValidSettings(settings: Record<string, unknown>): boolean {
+function isValidSettings(settings: StoredSettings | null | undefined): boolean {
   return (
+    typeof settings === "object" &&
+    settings !== null &&
     typeof settings.maxWidth === "number" &&
     typeof settings.maxHeight === "number" &&
     typeof settings.quantizeColors === "number" &&
@@ -76,30 +69,45 @@ function isValidSettings(settings: Record<string, unknown>): boolean {
   );
 }
 
-export async function loadPresets(): Promise<ToolPreset[]> {
-  if (await isAuthenticated()) {
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("tool_presets")
-      .select("id, name, settings, visibility")
-      .eq("tool_id", TOOL_ID)
-      .order("created_at", { ascending: true });
-    if (error) {
-      throw new Error(error.message);
-    }
-    return (data ?? [])
-      .filter((p) => isValidSettings(p.settings ?? {}))
-      .map((p) => ({
-        id: p.id,
-        name: p.name,
-        settings: p.settings as unknown as OptimizeSettings,
-        visibility: p.visibility,
-      }));
+async function getSession() {
+  if (!getSupabaseConfig()) {
+    return null;
   }
-  return fromStored(readLocalPresets());
+  const supabase = createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  return session;
 }
 
-export async function savePreset(
+/** Loads the user's custom presets. No result for anonymous/free users. */
+export async function loadCustomPresets(): Promise<ToolPreset[]> {
+  const session = await getSession();
+  if (!session) {
+    return [];
+  }
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("tool_presets")
+    .select("id, name, settings, visibility")
+    .eq("tool_id", TOOL_ID)
+    .eq("user_id", session.user.id)
+    .order("created_at", { ascending: true });
+  if (error) {
+    throw new Error(error.message);
+  }
+  return (data ?? [])
+    .filter((row) => isValidSettings(row.settings))
+    .map((row) => ({
+      id: row.id,
+      name: row.name,
+      settings: row.settings as unknown as OptimizeSettings,
+      visibility: row.visibility,
+    }));
+}
+
+/** Saving custom presets requires a logged-in (premium) account. */
+export async function saveCustomPreset(
   name: string,
   settings: OptimizeSettings,
 ): Promise<ToolPreset[]> {
@@ -107,41 +115,37 @@ export async function savePreset(
   if (!trimmed) {
     throw new Error("Preset name is required.");
   }
-
-  if (await isAuthenticated()) {
-    const supabase = createClient();
-    const { error } = await supabase.from("tool_presets").insert({
-      tool_id: TOOL_ID,
-      name: trimmed,
-      settings: settings as unknown as Record<string, unknown>,
-      visibility: "private",
-    });
-    if (error) {
-      throw new Error(error.message);
-    }
-    return loadPresets();
+  const session = await getSession();
+  if (!session) {
+    throw new Error("Sign in to save custom presets.");
   }
-
-  const presets = readLocalPresets();
-  presets.push({
-    id: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : String(Date.now()),
+  const supabase = createClient();
+  const { error } = await supabase.from("tool_presets").insert({
+    tool_id: TOOL_ID,
+    user_id: session.user.id,
     name: trimmed,
     settings: settings as unknown as Record<string, unknown>,
+    visibility: "private",
   });
-  writeLocalPresets(presets);
-  return fromStored(presets);
+  if (error) {
+    throw new Error(error.message);
+  }
+  return loadCustomPresets();
 }
 
-export async function deletePreset(id: string): Promise<ToolPreset[]> {
-  if (await isAuthenticated()) {
-    const supabase = createClient();
-    const { error } = await supabase.from("tool_presets").delete().eq("id", id);
-    if (error) {
-      throw new Error(error.message);
-    }
-    return loadPresets();
+export async function deleteCustomPreset(id: string): Promise<ToolPreset[]> {
+  const session = await getSession();
+  if (!session) {
+    throw new Error("Sign in to manage custom presets.");
   }
-
-  writeLocalPresets(readLocalPresets().filter((p) => p.id !== id));
-  return fromStored(readLocalPresets());
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("tool_presets")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", session.user.id);
+  if (error) {
+    throw new Error(error.message);
+  }
+  return loadCustomPresets();
 }

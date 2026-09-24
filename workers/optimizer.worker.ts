@@ -5,6 +5,8 @@ export type OptimizeSettings = {
   maxHeight: number;
   quantizeColors: number;
   dithering: DitheringAlgorithm;
+  /** 0..1 — how strongly the dithering pattern is applied. 0 = off. */
+  ditherStrength: number;
 };
 
 export type OptimizeRequest = {
@@ -196,6 +198,7 @@ function applyFloydSteinberg(
   data: Uint8ClampedArray,
   width: number,
   palette: RGB[],
+  strength: number,
   onRow?: (row: number) => void,
 ): void {
   const height = data.length / 4 / width;
@@ -208,9 +211,9 @@ function applyFloydSteinberg(
       const b = src[i + 2];
       const idx = nearestColor(r, g, b, palette);
       const [pr, pg, pb] = palette[idx];
-      const errR = r - pr;
-      const errG = g - pg;
-      const errB = b - pb;
+      const errR = (r - pr) * strength;
+      const errG = (g - pg) * strength;
+      const errB = (b - pb) * strength;
 
       data[i] = pr;
       data[i + 1] = pg;
@@ -239,6 +242,7 @@ function applyPointDithering(
   width: number,
   palette: RGB[],
   dithering: DitheringAlgorithm,
+  strength: number,
 ): void {
   const height = data.length / 4 / width;
   for (let y = 0; y < height; y++) {
@@ -251,10 +255,10 @@ function applyPointDithering(
 
       if (dithering === "bayer") {
         const threshold = BAYER_8[y % 8][x % 8] / 64;
-        color = adjustColor(r, g, b, (threshold - 0.5) * 255 * 0.6);
+        color = adjustColor(r, g, b, (threshold - 0.5) * 255 * 0.6 * strength);
       } else if (dithering === "ordered") {
         const matrix = ORDERED_4[y % 4][x % 4];
-        color = adjustColor(r, g, b, ((matrix + 0.5) / 16 - 0.5) * 40);
+        color = adjustColor(r, g, b, ((matrix + 0.5) / 16 - 0.5) * 40 * strength);
       } else {
         color = [r, g, b];
       }
@@ -281,6 +285,49 @@ function clampByte(value: number): number {
   return value < 0 ? 0 : value > 255 ? 255 : value;
 }
 
+/** Validates and clamps incoming settings; returns null when malformed. */
+function normalizeSettings(settings: OptimizeSettings): OptimizeSettings | null {
+  if (typeof settings !== "object" || settings === null) {
+    return null;
+  }
+  const maxWidth = Math.round(Number(settings.maxWidth));
+  const maxHeight = Math.round(Number(settings.maxHeight));
+  const quantizeColors = Math.round(Number(settings.quantizeColors));
+  const ditherStrength = Number(settings.ditherStrength);
+  if (
+    !Number.isFinite(maxWidth) ||
+    !Number.isFinite(maxHeight) ||
+    !Number.isFinite(quantizeColors) ||
+    !Number.isFinite(ditherStrength)
+  ) {
+    return null;
+  }
+  const DITHERINGS: DitheringAlgorithm[] = [
+    "none",
+    "floyd-steinberg",
+    "bayer",
+    "ordered",
+  ];
+  if (!DITHERINGS.includes(settings.dithering)) {
+    return null;
+  }
+  return {
+    maxWidth: clampInt(maxWidth, 16, 2048),
+    maxHeight: clampInt(maxHeight, 16, 2048),
+    quantizeColors: clampInt(quantizeColors, 2, 256),
+    dithering: settings.dithering,
+    ditherStrength: clampNum(ditherStrength, 0, 1),
+  };
+}
+
+function clampInt(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function clampNum(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
 async function runOptimize(request: OptimizeRequest): Promise<void> {
   const { jobId, file, settings } = request;
 
@@ -289,6 +336,17 @@ async function runOptimize(request: OptimizeRequest): Promise<void> {
       type: "error",
       jobId,
       message: "Image file is too large (max 64 MB).",
+    });
+    return;
+  }
+
+  const normalized = normalizeSettings(settings);
+
+  if (!normalized) {
+    post({
+      type: "error",
+      jobId,
+      message: "Invalid settings: the values are out of range.",
     });
     return;
   }
@@ -319,8 +377,8 @@ async function runOptimize(request: OptimizeRequest): Promise<void> {
   // Downscale to fit maxWidth/maxHeight, preserving aspect ratio.
   const scale = Math.min(
     1,
-    settings.maxWidth / source.width,
-    settings.maxHeight / source.height,
+    normalized.maxWidth / source.width,
+    normalized.maxHeight / source.height,
   );
   const outputWidth = Math.max(1, Math.round(source.width * scale));
   const outputHeight = Math.max(1, Math.round(source.height * scale));
@@ -358,7 +416,7 @@ async function runOptimize(request: OptimizeRequest): Promise<void> {
   // Sample every Nth pixel for the palette to keep median-cut fast.
   const sampleStep = Math.max(1, Math.floor((outputWidth * outputHeight) / 300_000));
   const histogram = buildColorHistogram(data, sampleStep);
-  const palette = medianCut(histogram, settings.quantizeColors);
+  const palette = medianCut(histogram, normalized.quantizeColors);
 
   const reportProgress = (rowsDone: number) => {
     post({
@@ -368,11 +426,11 @@ async function runOptimize(request: OptimizeRequest): Promise<void> {
     });
   };
 
-  if (settings.dithering === "floyd-steinberg") {
+  if (normalized.dithering === "floyd-steinberg") {
     if (cancelledJobs.has(jobId)) {
       return;
     }
-    await applyFloydSteinberg(data, outputWidth, palette, (row) => {
+    await applyFloydSteinberg(data, outputWidth, palette, normalized.ditherStrength, (row) => {
       if (cancelledJobs.has(jobId)) {
         throw new Error("Job cancelled.");
       }
@@ -390,7 +448,7 @@ async function runOptimize(request: OptimizeRequest): Promise<void> {
       }
       const endY = Math.min(outputHeight, y + rowsPerBand);
       const band = new Uint8ClampedArray(data.subarray(y * outputWidth * 4, endY * outputWidth * 4));
-      applyPointDithering(band, outputWidth, palette, settings.dithering);
+      applyPointDithering(band, outputWidth, palette, normalized.dithering, normalized.ditherStrength);
       data.set(band, y * outputWidth * 4);
       reportProgress(endY);
     }

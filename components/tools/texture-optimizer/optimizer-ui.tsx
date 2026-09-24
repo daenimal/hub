@@ -3,12 +3,15 @@
 /* eslint-disable @next/next/no-img-element -- blob/objectURL previews are not optimizable by next/image */
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 
+import { useAuth } from "@/lib/supabase/use-auth";
 import { createOptimizerWorker } from "@/lib/texture-optimizer/worker";
 import {
-  deletePreset,
-  loadPresets,
-  savePreset,
+  FREE_PRESETS,
+  deleteCustomPreset,
+  loadCustomPresets,
+  saveCustomPreset,
 } from "@/lib/texture-optimizer/presets";
 import type {
   DitheringAlgorithm,
@@ -30,6 +33,7 @@ type Result = {
   width: number;
   height: number;
   bytes: number;
+  format: "image/png" | "image/webp";
 };
 
 const DEFAULT_SETTINGS: OptimizeSettings = {
@@ -37,6 +41,7 @@ const DEFAULT_SETTINGS: OptimizeSettings = {
   maxHeight: 512,
   quantizeColors: 32,
   dithering: "floyd-steinberg",
+  ditherStrength: 1,
 };
 
 const DITHER_LABELS: Record<DitheringAlgorithm, string> = {
@@ -46,6 +51,11 @@ const DITHER_LABELS: Record<DitheringAlgorithm, string> = {
   ordered: "Ordered 4x4",
 };
 
+const DOWNLOAD_FORMATS: { value: Result["format"]; label: string }[] = [
+  { value: "image/png", label: "PNG" },
+  { value: "image/webp", label: "WebP" },
+];
+
 function formatBytes(bytes: number): string {
   if (bytes < 1024) {
     return `${bytes} B`;
@@ -54,19 +64,37 @@ function formatBytes(bytes: number): string {
 }
 
 export function OptimizerUI() {
+  const { user } = useAuth();
+  const isUnlocked = Boolean(user);
+
   const [file, setFile] = useState<SelectedFile | null>(null);
   const [settings, setSettings] = useState<OptimizeSettings>(DEFAULT_SETTINGS);
+  const [activePresetId, setActivePresetId] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
-  const [presets, setPresets] = useState<Awaited<ReturnType<typeof loadPresets>>>([]);
+  const [downloadFormat, setDownloadFormat] = useState<Result["format"]>("image/png");
+  const [customPresets, setCustomPresets] = useState<
+    Awaited<ReturnType<typeof loadCustomPresets>>
+  >([]);
   const [presetName, setPresetName] = useState("");
   const [isDragging, setIsDragging] = useState(false);
 
   const workerRef = useRef<Worker | null>(null);
   const jobIdRef = useRef<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const outputBitmapRef = useRef<ImageBitmap | null>(null);
+
+  const isBusy = phase === "processing";
+
+  // Keep the output bitmap alive so we can re-encode it for PNG/WebP.
+  useEffect(() => {
+    return () => {
+      outputBitmapRef.current?.close();
+      outputBitmapRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     let disposed = false;
@@ -92,7 +120,8 @@ export function OptimizerUI() {
           if (ctx) {
             ctx.drawImage(message.output, 0, 0);
           }
-          message.output.close();
+          outputBitmapRef.current?.close();
+          outputBitmapRef.current = message.output;
           canvas.convertToBlob({ type: "image/png" }).then((blob) => {
             if (disposed || jobIdRef.current === null) {
               return;
@@ -102,7 +131,9 @@ export function OptimizerUI() {
               width: message.outputWidth,
               height: message.outputHeight,
               bytes: blob.size,
+              format: "image/png",
             });
+            setDownloadFormat("image/png");
             setPhase("done");
             jobIdRef.current = null;
           });
@@ -123,9 +154,46 @@ export function OptimizerUI() {
     };
   }, []);
 
+  // Re-encode the kept bitmap when the user picks a different download format.
   useEffect(() => {
-    loadPresets().then(setPresets).catch(() => setPresets([]));
-  }, []);
+    const bitmap = outputBitmapRef.current;
+    if (!bitmap || phase !== "done") {
+      return;
+    }
+    let cancelled = false;
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.drawImage(bitmap, 0, 0);
+      canvas.convertToBlob({ type: downloadFormat }).then((blob) => {
+        if (cancelled) {
+          return;
+        }
+        setResult((current) => {
+          if (!current) {
+            return current;
+          }
+          URL.revokeObjectURL(current.objectUrl);
+          return {
+            ...current,
+            objectUrl: URL.createObjectURL(blob),
+            bytes: blob.size,
+            format: downloadFormat,
+          };
+        });
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [downloadFormat, phase]);
+
+  useEffect(() => {
+    if (!isUnlocked) {
+      return;
+    }
+    loadCustomPresets().then(setCustomPresets).catch(() => setCustomPresets([]));
+  }, [isUnlocked]);
 
   useEffect(() => {
     return () => {
@@ -146,6 +214,8 @@ export function OptimizerUI() {
       setPhase("idle");
       return;
     }
+    outputBitmapRef.current?.close();
+    outputBitmapRef.current = null;
     setFile({
       file: selected,
       name: selected.name,
@@ -158,6 +228,23 @@ export function OptimizerUI() {
     setProgress(0);
   }
 
+  function applyPreset(presetId: string) {
+    const preset = FREE_PRESETS.find((p) => p.id === presetId);
+    if (!preset) {
+      return;
+    }
+    setSettings({ ...preset.settings });
+    setActivePresetId(presetId);
+  }
+
+  function updateSetting<K extends keyof OptimizeSettings>(
+    key: K,
+    value: OptimizeSettings[K],
+  ) {
+    setSettings((current) => ({ ...current, [key]: value }));
+    setActivePresetId(null);
+  }
+
   function runOptimize() {
     const selected = file;
     const worker = workerRef.current;
@@ -168,6 +255,8 @@ export function OptimizerUI() {
     if (result) {
       URL.revokeObjectURL(result.objectUrl);
     }
+    outputBitmapRef.current?.close();
+    outputBitmapRef.current = null;
     setResult(null);
     setError(null);
     setProgress(0);
@@ -193,8 +282,8 @@ export function OptimizerUI() {
 
   async function handleSavePreset() {
     try {
-      const next = await savePreset(presetName, settings);
-      setPresets(next);
+      const next = await saveCustomPreset(presetName, settings);
+      setCustomPresets(next);
       setPresetName("");
     } catch (presetError) {
       setError(
@@ -205,16 +294,17 @@ export function OptimizerUI() {
 
   async function handleDeletePreset(id: string) {
     try {
-      setPresets(await deletePreset(id));
+      setCustomPresets(await deleteCustomPreset(id));
     } catch {
       setError("Could not delete the preset.");
     }
   }
 
-  const isBusy = phase === "processing";
+  const fileNameBase = file?.name.replace(/\.[^.]+$/, "") ?? "texture";
+  const downloadExtension = downloadFormat === "image/png" ? "png" : "webp";
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
+    <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
       <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
         <h2 className="text-lg font-semibold tracking-tight">Input</h2>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
@@ -331,24 +421,120 @@ export function OptimizerUI() {
 
       <aside className="space-y-6">
         <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="text-lg font-semibold tracking-tight">Settings</h2>
-          <div className="mt-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold tracking-tight">Presets</h2>
+            <span className="rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-700 dark:border-orange-900 dark:bg-orange-950/50 dark:text-orange-300">
+              Free
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+            One-click retro looks with fixed settings, available to everyone.
+          </p>
+          <div className="mt-4 grid grid-cols-1 gap-2">
+            {FREE_PRESETS.map((preset) => {
+              const selected = activePresetId === preset.id;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => applyPreset(preset.id)}
+                  className={`rounded-xl border px-4 py-3 text-left transition-colors ${
+                    selected
+                      ? "border-orange-400 bg-orange-50 dark:border-orange-500 dark:bg-orange-950/30"
+                      : "border-zinc-200 hover:border-orange-300 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:border-orange-800 dark:hover:bg-zinc-900/50"
+                  }`}
+                >
+                  <span className="block text-sm font-medium">
+                    {preset.name}
+                  </span>
+                  <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">
+                    {preset.settings.quantizeColors} colors ·{" "}
+                    {preset.settings.maxWidth}x{preset.settings.maxHeight} ·{" "}
+                    {DITHER_LABELS[preset.settings.dithering]}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <section
+          className="relative overflow-hidden rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900"
+          aria-label="Advanced settings"
+        >
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold tracking-tight">
+              Advanced settings
+            </h2>
+            <span className="inline-flex items-center gap-1 rounded-full border border-zinc-300 bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+              <svg
+                className="size-3"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={2}
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z"
+                />
+              </svg>
+              PRO
+            </span>
+          </div>
+
+          {!isUnlocked ? (
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-zinc-50/80 p-6 text-center backdrop-blur-[2px] dark:bg-zinc-950/80">
+              <span className="grid size-12 place-items-center rounded-full border border-zinc-300 bg-white dark:border-zinc-700 dark:bg-zinc-900">
+                <svg
+                  className="size-5 text-zinc-500 dark:text-zinc-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={1.8}
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z"
+                  />
+                </svg>
+              </span>
+              <p className="max-w-[220px] text-sm font-semibold">
+                Unlock fine control
+              </p>
+              <p className="max-w-[230px] text-xs leading-5 text-zinc-500 dark:text-zinc-400">
+                Set exact color counts, dither strength and resolution — and save
+                your own presets.
+              </p>
+              <Link
+                href="/login?next=/tools/texture-optimizer"
+                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
+              >
+                Sign in to unlock
+              </Link>
+            </div>
+          ) : null}
+
+          <fieldset disabled={!isUnlocked} className="mt-5 space-y-4">
+            <legend className="sr-only">Advanced optimization settings</legend>
             <label className="block">
               <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Max width (px)
               </span>
               <input
                 type="number"
-                min={32}
+                min={16}
                 max={2048}
                 value={settings.maxWidth}
                 onChange={(event) =>
-                  setSettings({
-                    ...settings,
-                    maxWidth: Number(event.target.value) || settings.maxWidth,
-                  })
+                  updateSetting(
+                    "maxWidth",
+                    Number(event.target.value) || settings.maxWidth,
+                  )
                 }
-                className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-orange-400 dark:border-zinc-700 dark:bg-zinc-950"
+                className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-orange-400 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950"
               />
             </label>
             <label className="block">
@@ -357,16 +543,16 @@ export function OptimizerUI() {
               </span>
               <input
                 type="number"
-                min={32}
+                min={16}
                 max={2048}
                 value={settings.maxHeight}
                 onChange={(event) =>
-                  setSettings({
-                    ...settings,
-                    maxHeight: Number(event.target.value) || settings.maxHeight,
-                  })
+                  updateSetting(
+                    "maxHeight",
+                    Number(event.target.value) || settings.maxHeight,
+                  )
                 }
-                className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-orange-400 dark:border-zinc-700 dark:bg-zinc-950"
+                className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-orange-400 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950"
               />
             </label>
             <label className="block">
@@ -379,10 +565,7 @@ export function OptimizerUI() {
                 max={256}
                 value={settings.quantizeColors}
                 onChange={(event) =>
-                  setSettings({
-                    ...settings,
-                    quantizeColors: Number(event.target.value),
-                  })
+                  updateSetting("quantizeColors", Number(event.target.value))
                 }
                 className="mt-2 w-full accent-orange-500"
               />
@@ -397,12 +580,12 @@ export function OptimizerUI() {
               <select
                 value={settings.dithering}
                 onChange={(event) =>
-                  setSettings({
-                    ...settings,
-                    dithering: event.target.value as DitheringAlgorithm,
-                  })
+                  updateSetting(
+                    "dithering",
+                    event.target.value as DitheringAlgorithm,
+                  )
                 }
-                className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-orange-400 dark:border-zinc-700 dark:bg-zinc-950"
+                className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-orange-400 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950"
               >
                 {(Object.keys(DITHER_LABELS) as DitheringAlgorithm[]).map(
                   (key) => (
@@ -413,17 +596,127 @@ export function OptimizerUI() {
                 )}
               </select>
             </label>
-          </div>
+            <label className="block">
+              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Dither strength
+              </span>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={settings.ditherStrength}
+                onChange={(event) =>
+                  updateSetting("ditherStrength", Number(event.target.value))
+                }
+                className="mt-2 w-full accent-orange-500"
+              />
+              <span className="mt-1 block text-xs text-zinc-500">
+                {Math.round(settings.ditherStrength * 100)}%
+              </span>
+            </label>
+          </fieldset>
         </section>
 
+        {isUnlocked ? (
+          <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+            <h2 className="text-lg font-semibold tracking-tight">My presets</h2>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+              Save the current advanced settings and reuse them later.
+            </p>
+            <div className="mt-4 flex gap-2">
+              <input
+                type="text"
+                value={presetName}
+                onChange={(event) => setPresetName(event.target.value)}
+                placeholder="Preset name"
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-orange-400 dark:border-zinc-700 dark:bg-zinc-950"
+              />
+              <button
+                type="button"
+                onClick={handleSavePreset}
+                className="shrink-0 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
+              >
+                Save
+              </button>
+            </div>
+            {customPresets.length > 0 ? (
+              <ul className="mt-4 space-y-2">
+                {customPresets.map((preset) => (
+                  <li
+                    key={preset.id}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-zinc-200 px-3 py-2 dark:border-zinc-800"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setSettings({ ...preset.settings })}
+                      className="text-sm font-medium text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-50"
+                    >
+                      {preset.name}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeletePreset(preset.id)}
+                      aria-label={`Delete preset ${preset.name}`}
+                      className="rounded p-1 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-red-600 dark:hover:bg-zinc-800"
+                    >
+                      <svg
+                        className="size-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        strokeWidth={1.8}
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"
+                        />
+                      </svg>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-4 text-sm text-zinc-500">No custom presets yet.</p>
+            )}
+          </section>
+        ) : null}
+
         <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="text-lg font-semibold tracking-tight">Worker</h2>
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-            {isBusy
-              ? "A job is running in the Web Worker."
-              : "The Web Worker will process pixels off the main thread."}
-          </p>
+          <h2 className="text-lg font-semibold tracking-tight">Export</h2>
           <div className="mt-4 flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-zinc-600 dark:text-zinc-400">
+                Format:
+              </span>
+              <div
+                role="radiogroup"
+                aria-label="Download format"
+                className="flex rounded-lg border border-zinc-300 p-0.5 dark:border-zinc-700"
+              >
+                {DOWNLOAD_FORMATS.map((format) => {
+                  const selected = downloadFormat === format.value;
+                  return (
+                    <button
+                      key={format.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      disabled={!result}
+                      onClick={() => setDownloadFormat(format.value)}
+                      className={`rounded-md px-3 py-1 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                        selected
+                          ? "bg-zinc-900 text-white dark:bg-zinc-50 dark:text-zinc-900"
+                          : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                      }`}
+                    >
+                      {format.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             <button
               type="button"
               disabled={!file || isBusy}
@@ -444,76 +737,17 @@ export function OptimizerUI() {
             {result ? (
               <a
                 href={result.objectUrl}
-                download={`${file?.name.replace(/\.[^.]+$/, "") ?? "texture"}-optimized.png`}
+                download={`${fileNameBase}-optimized.${downloadExtension}`}
                 className="w-full rounded-lg border border-zinc-300 px-4 py-2.5 text-center text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
               >
-                Download PNG
+                Download {downloadFormat === "image/png" ? "PNG" : "WebP"}
               </a>
             ) : null}
           </div>
-        </section>
-
-        <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="text-lg font-semibold tracking-tight">Presets</h2>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            Save the current settings and reuse them later.
+          <p className="mt-3 text-xs leading-5 text-zinc-500 dark:text-zinc-500">
+            Everything is processed locally in your browser — no uploads, no
+            wait queues.
           </p>
-          <div className="mt-4 flex gap-2">
-            <input
-              type="text"
-              value={presetName}
-              onChange={(event) => setPresetName(event.target.value)}
-              placeholder="Preset name"
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-orange-400 dark:border-zinc-700 dark:bg-zinc-950"
-            />
-            <button
-              type="button"
-              onClick={handleSavePreset}
-              className="shrink-0 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
-            >
-              Save
-            </button>
-          </div>
-          {presets.length > 0 ? (
-            <ul className="mt-4 space-y-2">
-              {presets.map((preset) => (
-                <li
-                  key={preset.id}
-                  className="flex items-center justify-between gap-2 rounded-lg border border-zinc-200 px-3 py-2 dark:border-zinc-800"
-                >
-                  <button
-                    type="button"
-                    onClick={() => setSettings(preset.settings)}
-                    className="text-sm font-medium text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-50"
-                  >
-                    {preset.name}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDeletePreset(preset.id)}
-                    aria-label={`Delete preset ${preset.name}`}
-                    className="rounded p-1 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-red-600 dark:hover:bg-zinc-800"
-                  >
-                    <svg
-                      className="size-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      strokeWidth={1.8}
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"
-                      />
-                    </svg>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="mt-4 text-sm text-zinc-500">No presets saved yet.</p>
-          )}
         </section>
       </aside>
     </div>
