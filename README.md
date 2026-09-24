@@ -66,7 +66,7 @@ Admin routes are protected on three tiers:
 2. **Routing** - `proxy.ts` (Next.js 16 proxy, formerly middleware) refreshes the session and redirects unauthorized users
 3. **Data** - SQL RLS + `is_admin()` enforce rules at the database level
 
-## Tool 1: Optimizer di Texture / Stile Retrò
+## Tool 1: Texture / Retro-Style Optimizer
 
 Route: `/tools/texture-optimizer`. Pixel manipulation (quantization, dithering, resizing) runs off the main thread in `workers/optimizer.worker.ts` (OffscreenCanvas), instantiated via `lib/texture-optimizer/worker.ts`.
 
