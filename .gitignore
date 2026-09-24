@@ -30,9 +30,12 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# env files - never commit real env files (only placeholders in .env.example)
+.env
+.env.*
 !.env.example
+*.env.local
+.env*.local
 
 # supabase cli
 /supabase/.temp/
