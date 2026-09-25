@@ -96,6 +96,7 @@ export function RegisterForm() {
         </span>
         <input
           type="text"
+          maxLength={60}
           autoComplete="name"
           value={name}
           onChange={(event) => setName(event.target.value)}
@@ -110,6 +111,7 @@ export function RegisterForm() {
         <input
           type="email"
           required
+          maxLength={320}
           autoComplete="email"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
@@ -125,6 +127,7 @@ export function RegisterForm() {
           type="password"
           required
           minLength={8}
+          maxLength={72}
           autoComplete="new-password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}

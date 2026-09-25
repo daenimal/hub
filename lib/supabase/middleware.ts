@@ -5,7 +5,7 @@ import { getSupabaseConfig } from "@/lib/supabase/env";
 import type { Database } from "@/lib/supabase/types";
 
 const ADMIN_PREFIX = "/admin";
-const AUTH_PREFIXES = ["/login", "/register", "/logout"];
+const AUTH_PREFIXES = ["/login", "/register"];
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -27,22 +27,21 @@ export async function updateSession(request: NextRequest) {
   }
 
   const supabase = createServerClient<Database>(config.url, config.anonKey, {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value),
-          );
-          supabaseResponse = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options),
-          );
-        },
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) =>
+          request.cookies.set(name, value),
+        );
+        supabaseResponse = NextResponse.next({ request });
+        cookiesToSet.forEach(({ name, value, options }) =>
+          supabaseResponse.cookies.set(name, value, options),
+        );
       },
     },
-  );
+  });
 
   const {
     data: { user },

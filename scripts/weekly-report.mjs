@@ -57,6 +57,17 @@ function gh(command) {
   return execSync(command, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 }
 
+function findOpenIssue(title) {
+  try {
+    const issues = JSON.parse(
+      gh(`gh issue list --repo ${REPO} --state open --limit 100 --json title`),
+    );
+    return issues.some((issue) => issue.title === title);
+  } catch {
+    return false;
+  }
+}
+
 function fetchDeploymentFailures() {
   try {
     const deployments = JSON.parse(
@@ -164,6 +175,10 @@ async function main() {
   const body = lines.join("\n");
 
   if (CREATE_ISSUE) {
+    if (findOpenIssue(title)) {
+      console.log(`Issue already exists, skipping: ${title}`);
+      return;
+    }
     const tmp = `.report-${date}.md`;
     const { writeFileSync } = await import("node:fs");
     writeFileSync(tmp, body);

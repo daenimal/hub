@@ -77,6 +77,7 @@ function LoginFormInner() {
         <input
           type="email"
           required
+          maxLength={320}
           autoComplete="email"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
@@ -91,6 +92,7 @@ function LoginFormInner() {
         <input
           type="password"
           required
+          maxLength={72}
           autoComplete="current-password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}

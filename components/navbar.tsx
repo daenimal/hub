@@ -1,33 +1,13 @@
-import type { User } from "@supabase/supabase-js";
+"use client";
+
 import Link from "next/link";
 
 import { SignOutButton } from "@/components/sign-out-button";
 import { ThemeToggle } from "@/components/theme-provider";
-import { getSupabaseConfig } from "@/lib/supabase/env";
-import { createClient } from "@/lib/supabase/server";
+import { useAuth } from "@/lib/supabase/use-auth";
 
-export async function Navbar() {
-  const config = getSupabaseConfig();
-
-  let user: User | null = null;
-  let isAdmin = false;
-
-  if (config) {
-    const supabase = await createClient();
-    const {
-      data: { user: supabaseUser },
-    } = await supabase.auth.getUser();
-    user = supabaseUser;
-
-    if (user) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .maybeSingle();
-      isAdmin = profile?.role === "admin";
-    }
-  }
+export function Navbar() {
+  const { user, isAdmin, isLoading } = useAuth();
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-zinc-200/70 bg-[var(--background)]/80 backdrop-blur supports-[backdrop-filter]:bg-[var(--background)]/70 dark:border-zinc-800">
@@ -62,9 +42,9 @@ export async function Navbar() {
 
         <div className="flex min-w-0 items-center gap-2">
           <ThemeToggle />
-          {user ? (
+          {isLoading ? null : user ? (
             <>
-              {user?.email ? (
+              {user.email ? (
                 <span className="hidden min-w-0 truncate text-sm text-zinc-600 dark:text-zinc-400 sm:inline">
                   {user.email}
                 </span>

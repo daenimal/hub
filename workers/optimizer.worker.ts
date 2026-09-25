@@ -348,6 +348,12 @@ function clampNum(value: number, min: number, max: number): number {
  * Reads pixel dimensions straight from the file header (PNG/GIF/WebP/JPEG),
  * without decoding the full image. Returns null for unknown formats.
  */
+function toDims(width: number, height: number): { width: number; height: number } | null {
+  return width > 0 && height > 0 && width < 2 ** 26 && height < 2 ** 26
+    ? { width, height }
+    : null;
+}
+
 async function readHeaderDimensions(file: Blob): Promise<{ width: number; height: number } | null> {
   const headBytes = new Uint8Array(await file.slice(0, 512).arrayBuffer());
   const ascii = (i: number, len: number) =>
@@ -360,18 +366,15 @@ async function readHeaderDimensions(file: Blob): Promise<{ width: number; height
       headBytes[0] === 0x89 && headBytes[1] === 0x50 &&
       headBytes[2] === 0x4e && headBytes[3] === 0x47
     ) {
-      return {
-        width: readUint32BE(headBytes, 16),
-        height: readUint32BE(headBytes, 20),
-      };
+      return toDims(readUint32BE(headBytes, 16), readUint32BE(headBytes, 20));
     }
 
     // GIF: "GIF87a"/"GIF89a", width/height little-endian at 6/8.
     if (headBytes.length >= 10 && ascii(0, 3) === "GIF") {
-      return {
-        width: headBytes[6] | (headBytes[7] << 8),
-        height: headBytes[8] | (headBytes[9] << 8),
-      };
+      return toDims(
+        headBytes[6] | (headBytes[7] << 8),
+        headBytes[8] | (headBytes[9] << 8),
+      );
     }
 
     // WebP: "RIFF....WEBP" container. Only the lossless (VP8L) and lossy
@@ -385,17 +388,15 @@ async function readHeaderDimensions(file: Blob): Promise<{ width: number; height
       if (tag === "VP8L" && headBytes.length >= 25) {
         // 1-byte signature then 4 bytes: 14-bit width-1, 14-bit height-1.
         const bits = readUint32LE(headBytes, 21);
-        return {
-          width: (bits & 0x3fff) + 1,
-          height: ((bits >> 14) & 0x3fff) + 1,
-        };
+        return toDims((bits & 0x3fff) + 1, ((bits >> 14) & 0x3fff) + 1);
       }
-      if (tag === "VP8 " && headBytes.length >= 27) {
-        // 3-byte frame tag, then width/height as 14-bit little-endian.
-        return {
-          width: (headBytes[23] | ((headBytes[24] & 0x3f) << 8)) & 0x3fff,
-          height: (headBytes[25] | ((headBytes[26] & 0x3f) << 8)) & 0x3fff,
-        };
+      if (tag === "VP8 " && headBytes.length >= 30) {
+        // Payload: 3-byte frame tag, 3-byte start code (0x9d 0x01 0x2a),
+        // then width/height as 14-bit little-endian.
+        return toDims(
+          (headBytes[26] | ((headBytes[27] & 0x3f) << 8)) & 0x3fff,
+          (headBytes[28] | ((headBytes[29] & 0x3f) << 8)) & 0x3fff,
+        );
       }
     }
 
