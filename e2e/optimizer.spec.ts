@@ -75,10 +75,11 @@ test("texture optimizer runs the pipeline and produces a preview", async ({
 
   await expect(page.getByText("test-texture.png")).toBeVisible();
 
-  await page.getByRole("button", { name: "Optimize" }).click();
+  await page.getByRole("button", { name: "Apply preset" }).click();
 
-  await expect(page.getByText("Optimized")).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByAltText("Optimized image preview")).toBeVisible();
+  await expect(page.getByAltText("Converted image preview")).toBeVisible({
+    timeout: 15_000,
+  });
   await expect(
     page.getByRole("link", { name: "Download PNG" }),
   ).toBeVisible();
@@ -92,33 +93,42 @@ test("texture optimizer cancel stops a running job", async ({ page }) => {
     .locator('input[type="file"]')
     .setInputFiles({ name: "cancel-test.png", mimeType: "image/png", buffer: png });
 
-  await page.getByRole("button", { name: "Optimize" }).click();
+  await page.getByRole("button", { name: "Apply preset" }).click();
   await page.getByRole("button", { name: "Cancel" }).click();
 
-  await expect(page.getByText("Optimization canceled.")).toBeVisible({
+  await expect(page.getByText("Conversion canceled.")).toBeVisible({
     timeout: 15_000,
   });
 });
 
-test("anonymous visitors see locked advanced settings", async ({ page }) => {
+test("anonymous visitors see locked premium panel", async ({ page }) => {
   await page.goto("/tools/texture-optimizer");
 
   const panel = page.locator("section", {
-    has: page.getByRole("heading", { name: "Advanced settings" }),
+    has: page.getByRole("heading", { name: "Premium" }),
   });
-  await expect(panel.getByText("Sign in to unlock")).toBeVisible();
+  await expect(panel.getByRole("button", { name: "Save" })).toBeVisible();
   await expect(
     panel.getByLabel("Colors (quantization)"),
   ).toBeDisabled();
+  await expect(
+    panel.getByLabel("Preset name"),
+  ).toBeDisabled();
+  await expect(panel.getByRole("button", { name: "Save" })).toBeDisabled();
 });
 
 test("free preset applies a fixed configuration", async ({ page }) => {
   await page.goto("/tools/texture-optimizer");
-  await page.getByRole("button", { name: /PS1 Classic/i }).click();
+  // The single PSX preset is pre-selected on load.
+  await expect(
+    page.getByRole("button", { name: "PSX 8-bit" }),
+  ).toHaveAttribute("aria-pressed", "true");
+
+  await page.getByRole("button", { name: "PSX 8-bit" }).click();
 
   const settings = page.locator(
     "section",
-    { has: page.getByRole("heading", { name: "Advanced settings" }) },
+    { has: page.getByRole("heading", { name: "Premium" }) },
   );
-  await expect(settings.getByText("32 colors", { exact: true })).toBeVisible();
+  await expect(settings.getByText("256 colors", { exact: true })).toBeVisible();
 });

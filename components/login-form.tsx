@@ -7,6 +7,7 @@ import { Suspense, useState } from "react";
 
 import { createClient } from "@/lib/supabase/client";
 import { getSupabaseConfig } from "@/lib/supabase/env";
+import { PasswordInput } from "@/components/password-input";
 
 function isInternalUrl(url: string | null): url is string {
   if (!url || !url.startsWith("/")) {
@@ -28,6 +29,10 @@ function LoginFormInner() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const forgotHref = email.trim()
+    ? `/forgot-password?email=${encodeURIComponent(email.trim())}`
+    : "/forgot-password";
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -66,7 +71,7 @@ function LoginFormInner() {
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Sign in</h1>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Use your credentials to access the hub.
+          Sign in to access saved presets and preferences across devices.
         </p>
       </div>
 
@@ -79,26 +84,31 @@ function LoginFormInner() {
           required
           maxLength={320}
           autoComplete="email"
+          autoFocus
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-orange-400 dark:border-zinc-700 dark:bg-zinc-950"
         />
       </label>
 
-      <label className="block">
-        <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-          Password
-        </span>
-        <input
-          type="password"
-          required
-          maxLength={72}
-          autoComplete="current-password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-orange-400 dark:border-zinc-700 dark:bg-zinc-950"
-        />
-      </label>
+      <PasswordInput
+        id="password"
+        label="Password"
+        value={password}
+        onChange={setPassword}
+        autoComplete="current-password"
+        required
+        maxLength={72}
+      />
+
+      <div className="-mt-2 flex justify-end">
+        <Link
+          href={forgotHref}
+          className="text-sm font-medium text-orange-600 hover:underline dark:text-orange-400"
+        >
+          Forgot password?
+        </Link>
+      </div>
 
       {error ? (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/50 dark:text-red-300">
@@ -109,7 +119,7 @@ function LoginFormInner() {
       <button
         type="submit"
         disabled={isSubmitting}
-        className="w-full rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:opacity-50 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
+        className="w-full rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-orange-500 disabled:opacity-50"
       >
         {isSubmitting ? "Signing in..." : "Sign in"}
       </button>

@@ -11,8 +11,9 @@ export type AuthUser = {
 } | null;
 
 /**
- * Returns the currently signed-in user and admin flag (subscription to auth
- * changes). When Supabase is not configured, this stays null / false.
+ * Returns the currently signed-in user, admin flag, and premium flag
+ * (subscription to auth changes). When Supabase is not configured, these stay
+ * null / false.
  *
  * `isLoading` is true while the initial session is still being resolved, so
  * callers can avoid flashing a wrong logged-in/logged-out UI.
@@ -20,10 +21,12 @@ export type AuthUser = {
 export function useAuth(): {
   user: AuthUser;
   isAdmin: boolean;
+  isPremium: boolean;
   isLoading: boolean;
 } {
   const [user, setUser] = useState<AuthUser>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isPremium, setIsPremium] = useState(false);
   // With Supabase configured the session is unknown until resolved (loading);
   // without it the state is already settled, so never "loading".
   const [isLoading, setIsLoading] = useState<boolean>(() => !!getSupabaseConfig());
@@ -40,13 +43,14 @@ export function useAuth(): {
     function resolve(sessionUser: AuthUser) {
       setUser(sessionUser);
       setIsAdmin(false);
+      setIsPremium(false);
       if (!sessionUser) {
         setIsLoading(false);
         return;
       }
       void supabase
         .from("profiles")
-        .select("role")
+        .select("role, premium")
         .eq("id", sessionUser.id)
         .maybeSingle()
         .then(
@@ -55,6 +59,7 @@ export function useAuth(): {
               return;
             }
             setIsAdmin(data?.role === "admin");
+            setIsPremium(data?.premium === true);
             setIsLoading(false);
           },
           () => {
@@ -62,6 +67,7 @@ export function useAuth(): {
               return;
             }
             setIsAdmin(false);
+            setIsPremium(false);
             setIsLoading(false);
           },
         );
@@ -96,5 +102,5 @@ export function useAuth(): {
     };
   }, []);
 
-  return { user, isAdmin, isLoading };
+  return { user, isAdmin, isPremium, isLoading };
 }

@@ -2,33 +2,23 @@
 
 import type { FormEvent } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 
 import { createClient } from "@/lib/supabase/client";
 import { getSupabaseConfig } from "@/lib/supabase/env";
-import { PasswordInput } from "@/components/password-input";
 
-export function RegisterForm() {
-  const router = useRouter();
-
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [passwordConfirm, setPasswordConfirm] = useState("");
+function ForgotPasswordFormInner() {
+  const searchParams = useSearchParams();
+  const [email, setEmail] = useState(searchParams.get("email") ?? "");
   const [error, setError] = useState<string | null>(null);
-  const [confirmationSent, setConfirmationSent] = useState(false);
+  const [sent, setSent] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSubmitting(true);
     setError(null);
-
-    if (password !== passwordConfirm) {
-      setError("Passwords do not match.");
-      setIsSubmitting(false);
-      return;
-    }
 
     if (!getSupabaseConfig()) {
       setError(
@@ -39,44 +29,37 @@ export function RegisterForm() {
     }
 
     const supabase = createClient();
-    const { data, error: signUpError } = await supabase.auth.signUp({
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(
       email,
-      password,
-    });
+      { redirectTo: `${window.location.origin}/reset-password` },
+    );
 
-    if (signUpError) {
-      setError("Could not create the account. Try again.");
+    if (resetError) {
+      setError("Could not send the reset link. Try again.");
       setIsSubmitting(false);
       return;
     }
 
-    // Email confirmation enabled: the session is null until the user confirms.
-    if (!data.session) {
-      setConfirmationSent(true);
-      setIsSubmitting(false);
-      return;
-    }
-
-    router.push("/");
-    router.refresh();
+    setSent(true);
+    setIsSubmitting(false);
   }
 
-  if (confirmationSent) {
+  if (sent) {
     return (
       <div className="w-full max-w-sm space-y-4 rounded-2xl border border-zinc-200 bg-white p-8 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <h1 className="text-xl font-semibold tracking-tight">Check your email</h1>
         <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-          A confirmation link has been sent to{" "}
+          A password reset link has been sent to{" "}
           <span className="font-medium text-zinc-900 dark:text-zinc-100">
             {email}
           </span>
-          . Open it to activate your account, then sign in.
+          . It expires shortly, so open it right away.
         </p>
         <Link
           href="/login"
           className="inline-block w-full rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-orange-500"
         >
-          Go to sign in
+          Back to sign in
         </Link>
       </div>
     );
@@ -89,11 +72,11 @@ export function RegisterForm() {
     >
       <div>
         <h1 className="text-xl font-semibold tracking-tight">
-          Create your account
+          Forgot your password?
         </h1>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Create a free account — premium unlocks advanced settings and custom
-          preset saving.
+          Enter the email linked to your premium account. We&apos;ll send you a link
+          to choose a new password.
         </p>
       </div>
 
@@ -113,40 +96,6 @@ export function RegisterForm() {
         />
       </label>
 
-      <PasswordInput
-        id="password"
-        label="Password"
-        value={password}
-        onChange={setPassword}
-        autoComplete="new-password"
-        required
-        minLength={8}
-        maxLength={72}
-        hint={{
-          text: "At least 8 characters.",
-          state:
-            password.length === 0 ? "idle" : password.length >= 8 ? "ok" : "error",
-        }}
-      />
-
-      <PasswordInput
-        id="confirm-password"
-        label="Confirm password"
-        value={passwordConfirm}
-        onChange={setPasswordConfirm}
-        autoComplete="new-password"
-        required
-        minLength={8}
-        maxLength={72}
-        hint={
-          !passwordConfirm
-            ? { text: "Re-enter your password.", state: "idle" }
-            : passwordConfirm === password
-              ? { text: "Passwords match.", state: "ok" }
-              : { text: "Passwords do not match.", state: "error" }
-        }
-      />
-
       {error ? (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/50 dark:text-red-300">
           {error}
@@ -158,11 +107,11 @@ export function RegisterForm() {
         disabled={isSubmitting}
         className="w-full rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-orange-500 disabled:opacity-50"
       >
-        {isSubmitting ? "Creating account..." : "Create account"}
+        {isSubmitting ? "Sending link..." : "Send reset link"}
       </button>
 
       <p className="text-center text-sm text-zinc-500 dark:text-zinc-500">
-        Already have an account?{" "}
+        Remembered it?{" "}
         <Link
           href="/login"
           className="font-medium text-zinc-900 hover:underline dark:text-zinc-100"
@@ -171,5 +120,19 @@ export function RegisterForm() {
         </Link>
       </p>
     </form>
+  );
+}
+
+export function ForgotPasswordForm() {
+  return (
+    <Suspense
+      fallback={
+        <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-8 dark:border-zinc-800 dark:bg-zinc-900">
+          Loading...
+        </div>
+      }
+    >
+      <ForgotPasswordFormInner />
+    </Suspense>
   );
 }

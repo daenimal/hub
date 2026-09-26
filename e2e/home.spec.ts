@@ -6,17 +6,20 @@ test("homepage shows hero and tool cards", async ({ page }) => {
     page.getByRole("heading", { level: 1 }),
   ).toContainText("Micro utilities");
   await expect(
-    page.getByText("Texture / Retro-Style Optimizer"),
+    page.getByRole("heading", { name: "Texture" }),
   ).toBeVisible();
 });
 
-test("navigation to the texture optimizer tool works", async ({ page }) => {
+test("navigation to the texture tool works", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("link", { name: "Texture Optimizer" }).click();
+  await page
+    .locator("header nav")
+    .getByRole("link", { name: "Texture" })
+    .click();
   await expect(page).toHaveURL(/\/tools\/texture-optimizer/);
   await expect(
-    page.getByRole("heading", { level: 1 }),
-  ).toContainText("Texture / Retro-Style Optimizer");
+    page.locator("header nav").getByRole("link", { name: "Texture" }),
+  ).toHaveAttribute("aria-current", "page");
 });
 
 test("robots.txt disallows admin and login", async ({ request }) => {

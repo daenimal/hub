@@ -1,4 +1,4 @@
-export type ThemeId = "onyx" | "violet" | "ocean" | "ember" | "forest";
+export type ThemeId = "onyx" | "blue" | "green";
 
 export type Theme = {
   id: ThemeId;
@@ -7,38 +7,26 @@ export type Theme = {
   swatch: [string, string, string];
 };
 
-export const THEME_STORAGE_KEY = "microhub.theme";
+export const THEME_STORAGE_KEY = "hub.theme";
 
 export const THEMES: Theme[] = [
   {
     id: "onyx",
     name: "Onyx",
-    overview: "Neutral dark surfaces",
+    overview: "Black surfaces, orange accent",
     swatch: ["#09090b", "#18181b", "#f97316"],
   },
   {
-    id: "violet",
-    name: "Violet",
-    overview: "Cool purple-tinted darks",
-    swatch: ["#13102a", "#211c3d", "#7c3aed"],
+    id: "blue",
+    name: "Sapphire",
+    overview: "Black surfaces, sky accent",
+    swatch: ["#09090b", "#18181b", "#0ea5e9"],
   },
   {
-    id: "ocean",
-    name: "Ocean",
-    overview: "Deep blue-teal tones",
-    swatch: ["#101a28", "#1d2c3e", "#0ea5e9"],
-  },
-  {
-    id: "ember",
-    name: "Ember",
-    overview: "Warm amber accents",
-    swatch: ["#2b1515", "#472424", "#f59e0b"],
-  },
-  {
-    id: "forest",
-    name: "Forest",
-    overview: "Dark green surfaces",
-    swatch: ["#121e18", "#20332a", "#22c55e"],
+    id: "green",
+    name: "Emerald",
+    overview: "Black surfaces, emerald accent",
+    swatch: ["#09090b", "#18181b", "#10b981"],
   },
 ];
 

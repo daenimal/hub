@@ -1,4 +1,4 @@
-# Project State Report — MicroHub (hub)
+# Project State Report — Hub
 
 > Handover document for AI agents. Read `AGENTS.md`, `README.md`, and `node_modules/next/dist/docs/` (Next.js 16 has breaking changes vs. training data) before touching code.
 

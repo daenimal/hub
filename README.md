@@ -1,4 +1,4 @@
-# MicroHub
+# Hub
 
 Personal in-browser micro-utility hub for developers, 3D artists, and creators.
 

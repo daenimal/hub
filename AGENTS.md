@@ -58,6 +58,13 @@ Keep diffs minimal. Do not run `npm audit`, upgrade deps, or reformat unrelated 
 1. **@supabase/ssr:** Always use the official `@supabase/ssr` package for handling cookies across Server Components, Client Components, and Middleware. Never mix client and server client instances incorrectly.
 2. **Server Components by Default:** Keep components as Server Components by default. Add 'use client' only at the leaf nodes where interactivity, canvas hooks, or auth forms are strictly required.
 
+### D. Single-View Layout (no page scroll)
+
+1. **Every page must fit in one viewport — the page itself never scrolls on desktop.** This is a fixed rule for all pages of the site.
+2. Implement it with a full-height page container: `lg:h-[calc(100dvh-4rem)]` (4rem = navbar height) + `lg:min-h-0` + `lg:overflow-hidden`, then a `flex` + `min-h-0` chain that distributes the leftover space to panels.
+3. Never let an inner list force the page to grow. Panels that need to scroll move it *inside* the panel: `min-h-0 flex-1` + `overflow-y-auto` (never the page). See the Texture tool (`optimizer-ui.tsx`): upload strip + preview on the left, `Presets | Premium` side by side on the right, both full-height.
+4. Push internal scrollbars to the smallest containing area possible; keep headers, controls, and actions always visible.
+
 ---
 
 ## 4. Git & Workflow Rules
@@ -70,7 +77,7 @@ Keep diffs minimal. Do not run `npm audit`, upgrade deps, or reformat unrelated 
 ## 5. Project Map (read these, don't explore blindly)
 - `proxy.ts` — Next.js Proxy (v16, replaces `middleware.ts`) -> route guard in `lib/supabase/middleware.ts` (redirects, admin check).
 - `lib/supabase/` — `client.ts` (browser), `server.ts` (RSC), `middleware.ts` (proxy session), `env.ts` (config guard, null when env missing), `types.ts` (DB types).
-- `components/` — shared UI; `components/tools/texture-optimizer/optimizer-ui.tsx` is Tool 1's client UI (state machine: idle/processing/done/error/canceled; progress, cancel, preview, presets). Free vs premium gating: anonymous users can only pick the fixed `FREE_PRESETS`; the advanced panel (custom colors, dither strength, resolution) and custom preset saving are locked behind a signed-in account (see `lib/supabase/use-auth.ts`).
+- `components/` — shared UI; `components/tools/texture-optimizer/optimizer-ui.tsx` is Tool 1's client UI (state machine: idle/processing/done/error/canceled; progress, cancel, preview, presets). Free vs premium gating: anonymous/free users can only pick the fixed `FREE_PRESETS`; the merged `Premium` panel (advanced settings + My presets: custom colors, dither strength, resolution) is disabled unless the profile has the `premium` flag (see `lib/supabase/use-auth.ts`; `profiles.premium` in migration 005, write-side enforced by `tool_presets` RLS in migration 006 — admins bypass).
 - `lib/tools/registry.tsx` — the tool list used by the homepage (single source of truth: `tools`, `getTool`, `toolBadge`).
 - `workers/optimizer.worker.ts` — complete pixel pipeline (decode, downscale, median-cut quantization, Floyd-Steinberg/Bayer/ordered dithering with `ditherStrength` 0..1, progress, per-job cancel, size guardrails, input-settings validation), wired via `lib/texture-optimizer/worker.ts`; free presets + signed-in preset persistence live in `lib/texture-optimizer/presets.ts`.
 - `app/` — routes: `/`, `/login`, `/admin/dashboard`, `/tools/texture-optimizer`, `/api/log` (error intake); `app/robots.ts` disallows `/admin` + `/login`.

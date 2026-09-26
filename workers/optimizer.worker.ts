@@ -122,6 +122,15 @@ function channelRange(histogram: Map<number, number>, channel: 0 | 1 | 2): [numb
 
 type RGB = [number, number, number];
 
+/**
+ * Rounds an 8-bit channel to the nearest 5-bit level. The PSX renders every
+ * color as 15-bit (BGR 5:5:5), so a palette with only 5-bit-representable
+ * entries is exactly what the console can display.
+ */
+function snapTo15bit(value: number): number {
+  return Math.round((Math.round((value * 31) / 255) * 255) / 31);
+}
+
 function splitByChannel(
   histogram: Map<number, number>,
   channel: 0 | 1 | 2,
@@ -176,9 +185,9 @@ function medianCut(histogram: Map<number, number>, targetColors: number): RGB[] 
     const g = channelRange(box, 1);
     const b = channelRange(box, 2);
     return [
-      Math.round((r[0] + r[1]) / 2),
-      Math.round((g[0] + g[1]) / 2),
-      Math.round((b[0] + b[1]) / 2),
+      snapTo15bit(Math.round((r[0] + r[1]) / 2)),
+      snapTo15bit(Math.round((g[0] + g[1]) / 2)),
+      snapTo15bit(Math.round((b[0] + b[1]) / 2)),
     ] as RGB;
   });
 }
@@ -347,14 +356,89 @@ function clampNum(value: number, min: number, max: number): number {
 /**
  * Reads pixel dimensions straight from the file header (PNG/GIF/WebP/JPEG),
  * without decoding the full image. Returns null for unknown formats.
+ * JPEG frames also report the EXIF orientation so callers can account for
+ * rotated/transposed frames BEFORE the decoder applies it.
  */
-function toDims(width: number, height: number): { width: number; height: number } | null {
+function toDims(width: number, height: number, orientation: number | null = null): { width: number; height: number; orientation: number | null } | null {
   return width > 0 && height > 0 && width < 2 ** 26 && height < 2 ** 26
-    ? { width, height }
+    ? { width, height, orientation }
     : null;
 }
 
-async function readHeaderDimensions(file: Blob): Promise<{ width: number; height: number } | null> {
+/**
+ * Reads the exact-orientation tag (1..8) from the EXIF APP1 segment of a
+ * JPEG. Values 5..8 swap the frame's width/height once applied.
+ */
+function readJpegOrientation(headBytes: Uint8Array): number | null {
+  let offset = 2;
+  while (offset + 4 < headBytes.length) {
+    if (headBytes[offset] !== 0xff) {
+      return null;
+    }
+    const marker = headBytes[offset + 1];
+    const segmentLength = (headBytes[offset + 2] << 8) | headBytes[offset + 3];
+    if (segmentLength < 2 || offset + 2 + segmentLength > headBytes.length) {
+      return null;
+    }
+    if (marker === 0xe1) {
+      const start = offset + 4;
+      const isExif =
+        headBytes[start] === 0x45 && headBytes[start + 1] === 0x78 &&
+        headBytes[start + 2] === 0x69 && headBytes[start + 3] === 0x66 &&
+        headBytes[start + 4] === 0x00 && headBytes[start + 5] === 0x00;
+      if (isExif) {
+        const orientation = parseExifOrientation(
+          headBytes.subarray(start + 6, offset + 2 + segmentLength),
+        );
+        if (orientation) {
+          return orientation;
+        }
+      }
+    }
+    offset += 2 + segmentLength;
+  }
+  return null;
+}
+
+/** Parses the TIFF directory inside EXIF for tag 0x0112 (orientation). */
+function parseExifOrientation(tiff: Uint8Array): number | null {
+  if (tiff.length < 12) {
+    return null;
+  }
+  const littleEndian = tiff[0] === 0x49 && tiff[1] === 0x49;
+  const bigEndian = tiff[0] === 0x4d && tiff[1] === 0x4d;
+  if (!littleEndian && !bigEndian) {
+    return null;
+  }
+  const u16 = (o: number) =>
+    littleEndian ? tiff[o] | (tiff[o + 1] << 8) : (tiff[o] << 8) | tiff[o + 1];
+  const u32 = (o: number) =>
+    littleEndian
+      ? (tiff[o] | (tiff[o + 1] << 8) | (tiff[o + 2] << 16) | (tiff[o + 3] << 24)) >>> 0
+      : (((tiff[o] << 24) | (tiff[o + 1] << 16) | (tiff[o + 2] << 8) | tiff[o + 3]) >>> 0);
+  if (u16(2) !== 42) {
+    return null;
+  }
+  const ifd0 = u32(4);
+  if (ifd0 + 2 > tiff.length) {
+    return null;
+  }
+  const count = u16(ifd0);
+  for (let i = 0; i < count; i++) {
+    const entry = ifd0 + 2 + i * 12;
+    if (entry + 12 > tiff.length) {
+      return null;
+    }
+    if (u16(entry) === 0x0112) {
+      // Orientation is a SHORT (type 3) holding one value.
+      const value = u16(entry + 8);
+      return value >= 1 && value <= 8 ? value : null;
+    }
+  }
+  return null;
+}
+
+async function readHeaderDimensions(file: Blob): Promise<{ width: number; height: number; orientation: number | null } | null> {
   const headBytes = new Uint8Array(await file.slice(0, 512).arrayBuffer());
   const ascii = (i: number, len: number) =>
     String.fromCharCode(...Array.from(headBytes.subarray(i, i + len)));
@@ -420,10 +504,9 @@ async function readHeaderDimensions(file: Blob): Promise<{ width: number; height
         const segmentLength = (headBytes[offset + 2] << 8) | headBytes[offset + 3];
         if (softTable[marker]) {
           // Precision(1) then height(2) then width(2), big-endian.
-          return {
-            height: (headBytes[offset + 5] << 8) | headBytes[offset + 6],
-            width: (headBytes[offset + 7] << 8) | headBytes[offset + 8],
-          };
+          const width = (headBytes[offset + 7] << 8) | headBytes[offset + 8];
+          const height = (headBytes[offset + 5] << 8) | headBytes[offset + 6];
+          return toDims(width, height, readJpegOrientation(headBytes));
         }
         offset += 2 + segmentLength;
       }
@@ -480,18 +563,23 @@ async function runOptimize(request: OptimizeRequest): Promise<void> {
     }
     // When a downscale is needed, ask the decoder to resize natively (aspect
     // preserved) so the full original bitmap is never allocated in memory.
+    // EXIF frames rotated by 90/270° (5..8) swap the stored width/height, and
+    // `from-image` lets the decoder rotate before the resize, so compute the
+    // resize from the rotated dimensions to avoid distortion.
     let options: ImageBitmapOptions | undefined;
     if (dims) {
+      const rotated = dims.orientation !== null && dims.orientation >= 5;
+      const dimsWidth = rotated ? dims.height : dims.width;
+      const dimsHeight = rotated ? dims.width : dims.height;
+      options = { imageOrientation: "from-image" };
       const scale = Math.min(
         1,
-        normalized.maxWidth / dims.width,
-        normalized.maxHeight / dims.height,
+        normalized.maxWidth / dimsWidth,
+        normalized.maxHeight / dimsHeight,
       );
       if (scale < 1) {
-        options = {
-          resizeWidth: Math.max(1, Math.round(dims.width * scale)),
-          resizeHeight: Math.max(1, Math.round(dims.height * scale)),
-        };
+        options.resizeWidth = Math.max(1, Math.round(dimsWidth * scale));
+        options.resizeHeight = Math.max(1, Math.round(dimsHeight * scale));
       }
     }
     source = await createImageBitmap(file, options);

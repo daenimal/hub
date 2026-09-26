@@ -13,41 +13,23 @@ export type ToolPreset = {
 
 const TOOL_ID = "texture-optimizer";
 
-/** Free presets: fixed settings, usable by anyone. */
+/**
+ * Free presets: fixed settings, usable by anyone.
+ *
+ * Single PSX preset for the ORIGINAL PlayStation hardware (not just a "retro
+ * look"): it stays within a 256×256 texture page, uses an 8-bit CLUT size
+ * (256 colors), pre-dithers with error diffusion so gradients survive on
+ * modern screens, and lets the worker snap colors to the console's 15-bit
+ * (5:5:5) output. See docs/psx-texture-presets.md for the hardware details.
+ */
 export const FREE_PRESETS: ToolPreset[] = [
   {
-    id: "preset-ps1",
-    name: "PS1 Classic",
-    settings: {
-      maxWidth: 512,
-      maxHeight: 512,
-      quantizeColors: 32,
-      dithering: "bayer",
-      ditherStrength: 1,
-    },
-    visibility: "public",
-    builtin: true,
-  },
-  {
-    id: "preset-gameboy",
-    name: "GameBoy 4-Color",
+    id: "preset-psx-8bit",
+    name: "PSX 8-bit",
     settings: {
       maxWidth: 256,
       maxHeight: 256,
-      quantizeColors: 4,
-      dithering: "ordered",
-      ditherStrength: 1,
-    },
-    visibility: "public",
-    builtin: true,
-  },
-  {
-    id: "preset-lowres16",
-    name: "Low-Res 16-Color",
-    settings: {
-      maxWidth: 64,
-      maxHeight: 64,
-      quantizeColors: 16,
+      quantizeColors: 256,
       dithering: "floyd-steinberg",
       ditherStrength: 1,
     },

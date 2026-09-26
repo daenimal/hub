@@ -1,0 +1,10 @@
+{
+  "confirmation": {
+    "subject": "Confirm your Hub account",
+    "template": "./supabase/templates/confirmation.html"
+  },
+  "recovery": {
+    "subject": "Reset your Hub password",
+    "template": "./supabase/templates/recovery.html"
+  }
+}

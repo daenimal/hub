@@ -5,7 +5,8 @@ import { getSupabaseConfig } from "@/lib/supabase/env";
 import type { Database } from "@/lib/supabase/types";
 
 const ADMIN_PREFIX = "/admin";
-const AUTH_PREFIXES = ["/login", "/register"];
+const AUTH_PREFIXES = ["/login", "/register", "/forgot-password", "/reset-password"];
+const USER_PREFIXES = ["/account"];
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -22,7 +23,7 @@ export async function updateSession(request: NextRequest) {
 
   // Skip the auth round-trip on public pages: only protected paths need the
   // session resolved. The Navbar Server Component handles UI auth state.
-  if (!isAdminRoute(pathname) && !isAuthRoute) {
+  if (!isAdminRoute(pathname) && !isUserRoute(pathname) && !isAuthRoute) {
     return supabaseResponse;
   }
 
@@ -48,7 +49,7 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    if (isAdminRoute(pathname)) {
+    if (isAdminRoute(pathname) || isUserRoute(pathname)) {
       const url = request.nextUrl.clone();
       url.pathname = "/login";
       url.searchParams.set("next", pathname);
@@ -82,4 +83,10 @@ export async function updateSession(request: NextRequest) {
 
 function isAdminRoute(pathname: string) {
   return pathname === ADMIN_PREFIX || pathname.startsWith(`${ADMIN_PREFIX}/`);
+}
+
+function isUserRoute(pathname: string) {
+  return USER_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
 }

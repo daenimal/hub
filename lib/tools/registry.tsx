@@ -109,9 +109,9 @@ const webpIcon = () => (
 export const tools: Tool[] = [
   {
     slug: "texture-optimizer",
-    title: "Texture / Retro-Style Optimizer",
+    title: "Texture",
     description:
-      "Cut texture weight and apply a retro style (limited palettes, dithering), processing pixels in a Web Worker without blocking the UI.",
+      "Convert textures into original PlayStation formats: 256×256, 16 or 256 colors, 15-bit output.",
     status: "available",
     href: "/tools/texture-optimizer",
     icon: paletteIcon(),
@@ -120,7 +120,7 @@ export const tools: Tool[] = [
     slug: "png-compressor",
     title: "PNG Compressor",
     description:
-      "Optimize and compress PNG images locally in the browser, no external services.",
+      "Reduce PNG file sizes in a few clicks.",
     status: "coming-soon",
     icon: codeIcon(),
   },
@@ -128,7 +128,7 @@ export const tools: Tool[] = [
     slug: "palette-extractor",
     title: "Palette Extractor",
     description:
-      "Auto-extract dominant color palettes from any image or texture.",
+      "Pull the dominant colors out of any image.",
     status: "coming-soon",
     icon: paletteIcon(),
   },
@@ -136,7 +136,7 @@ export const tools: Tool[] = [
     slug: "normal-map-generator",
     title: "Normal Map Generator",
     description:
-      "Generate normal maps and height maps from 2D images for PBR materials and game engines.",
+      "Turn flat images into normal and height maps for 3D looks.",
     status: "coming-soon",
     icon: waveIcon(),
   },
@@ -144,7 +144,7 @@ export const tools: Tool[] = [
     slug: "dithering-studio",
     title: "Dithering Studio",
     description:
-      "Apply dithering algorithms (Bayer, Floyd-Steinberg) to images for a retro look.",
+      "Give textures authentic PSX-style dithering and banding.",
     status: "coming-soon",
     icon: ditherIcon(),
   },
@@ -152,7 +152,7 @@ export const tools: Tool[] = [
     slug: "ascii-converter",
     title: "ASCII Converter",
     description:
-      "Turn photos and textures into interactive ASCII art with adjustable detail levels.",
+      "Turn photos and textures into ASCII art.",
     status: "coming-soon",
     icon: asciiIcon(),
   },
@@ -160,7 +160,7 @@ export const tools: Tool[] = [
     slug: "webp-optimizer",
     title: "WebP Optimizer",
     description:
-      "Cut the weight of images and textures by converting to WebP/AVIF with quality control.",
+      "Convert images to WebP for smaller file sizes.",
     status: "coming-soon",
     icon: webpIcon(),
   },
